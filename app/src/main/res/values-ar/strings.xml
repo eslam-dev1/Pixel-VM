@@ -1,0 +1,74 @@
+<resources>
+    <string name="app_name">PixelSim</string>
+    <string name="app_phone">الهاتف</string>
+    <string name="app_messages">الرسائل</string>
+    <string name="app_camera">الكاميرا</string>
+    <string name="app_clock">الساعة</string>
+    <string name="app_calculator">الآلة الحاسبة</string>
+    <string name="app_notes">الملاحظات</string>
+    <string name="app_gallery">المعرض</string>
+    <string name="app_settings">الإعدادات</string>
+    <string name="app_files">الملفات</string>
+    <string name="app_contacts">جهات الاتصال</string>
+    <string name="app_calendar">التقويم</string>
+
+    <string name="simulation_notice">محاكاة، غير تابعة لـ Google</string>
+    <string name="swipe_up_to_unlock">اسحب لأعلى لإلغاء القفل</string>
+    <string name="enter_pin">أدخل رمز PIN</string>
+    <string name="wrong_pin">رمز PIN غير صحيح. حاول مجدداً.</string>
+    <string name="search_apps">بحث في التطبيقات…</string>
+    <string name="clear_all">مسح الكل</string>
+    <string name="no_recent_apps">لا توجد تطبيقات حديثة</string>
+
+    <string name="quick_settings_wifi">الإنترنت</string>
+    <string name="quick_settings_bluetooth">البلوتوث</string>
+    <string name="quick_settings_flashlight">المصباح</string>
+    <string name="quick_settings_dnd">عدم الإزعاج</string>
+    <string name="quick_settings_autorotate">التدوير التلقائي</string>
+    <string name="quick_settings_battery">توفير شحن البطارية</string>
+    <string name="quick_settings_simulated">محاكاة</string>
+
+    <string name="settings_display">الشاشة</string>
+    <string name="settings_notifications">الإشعارات</string>
+    <string name="settings_wallpaper">الخلفية والنمط</string>
+    <string name="settings_sound">الصوت والاهتزاز</string>
+    <string name="settings_battery">البطارية</string>
+    <string name="settings_about">حول الهاتف</string>
+    <string name="settings_security">الأمان ورمز PIN</string>
+    <string name="settings_reset">إعادة ضبط الهاتف المحاكي</string>
+    <string name="reset_confirm_title">إعادة ضبط الهاتف؟</string>
+    <string name="reset_confirm_message">سيؤدي هذا إلى مسح جميع الملاحظات والمنبهات والتخطيط المخصص وإعادة ضبط الإعدادات إلى الوضع الافتراضي.</string>
+    <string name="reset_button">إعادة ضبط</string>
+    <string name="cancel_button">إلغاء</string>
+    <string name="delete_button">حذف</string>
+    <string name="save_button">حفظ</string>
+    <string name="add_button">إضافة</string>
+    <string name="edit_button">تعديل</string>
+    <string name="close_button">إغلاق</string>
+    <string name="back_button">رجوع</string>
+
+    <string name="camera_permission_rationale">يلزم الحصول على إذن الكاميرا لمعاينة الصور والتقاطها في الكاميرا المحاكية.</string>
+    <string name="contacts_permission_rationale">يلزم الحصول على إذن جهات الاتصال لعرض جهات الاتصال من جهازك.</string>
+    <string name="calendar_permission_rationale">يلزم الحصول على إذن التقويم لعرض أحداث التقويم من جهازك.</string>
+    <string name="grant_permission">منح الإذن</string>
+    <string name="permission_denied">تم رفض الإذن. لا يزال بإمكانك استخدام الميزات المحاكية الأخرى.</string>
+    <string name="no_contacts_found">لم يتم العثور على جهات اتصال في الجهاز</string>
+    <string name="no_notes_yet">لا توجد ملاحظات بعد</string>
+    <string name="create_first_note">اضغط + لكتابة ملاحظة</string>
+    <string name="no_photos_yet">لا توجد صور بعد</string>
+    <string name="take_photo_prompt">التقط صوراً بالكاميرا أو اختر من الجهاز</string>
+
+    <string name="alarm_saved">تم حفظ المنبه</string>
+    <string name="timer">المؤقت</string>
+    <string name="stopwatch">ساعة الإيقاف</string>
+    <string name="alarms">المنبهات</string>
+    <string name="world_clock">الساعة العالمية</string>
+    <string name="start">بدء</string>
+    <string name="stop">إيقاف</string>
+    <string name="pause">إيقاف مؤقت</string>
+    <string name="resume">استئناف</string>
+    <string name="lap">دورة</string>
+    <string name="reset">إعادة تعيين</string>
+    <string name="bezel_toggle">إطار الهاتف</string>
+    <string name="bezel_desc">إظهار هيكل هاتف واقعي مع فتحة كاميرا الشاشة</string>
+</resources>

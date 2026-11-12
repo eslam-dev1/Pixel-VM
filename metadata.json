@@ -1,0 +1,6 @@
+{
+  "name": "PixelSim",
+  "description": "A native Android phone-OS simulator with Pixel-style Material You design, system controls, and interactive apps.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

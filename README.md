@@ -1,11 +1,26 @@
-<div align="center">
+# PixelSim - Android Simulator
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+PixelSim is a full phone-OS simulator Android app running inside native Jetpack Compose & Material You.
 
-  <h1>Built with AI Studio</h2>
+## Installation on Honor X9d (MagicOS 9)
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+1. Enable **"Install unknown apps"** for your browser or file manager in system settings.
+2. Transfer and install the debug APK.
+3. Open PixelSim.
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+## Fixing Alarm and Notification Delays
 
-</div>
+MagicOS 9 has aggressive background restrictions. If alarms or notifications are delayed:
+
+1. Open **Settings** inside PixelSim.
+2. Go to **MagicOS Reliability Guide**.
+3. Follow the 5-step guide to:
+   - Set Battery usage to **"Unrestricted"**.
+   - Set App launch to **"Manage manually"** (Allow Auto-launch, Secondary launch, and Run in background).
+   - **Lock the app in Recents** (Swipe down on the app card in system Recents).
+   - Grant **Notification permissions**.
+   - Grant **Exact Alarm permission** (Android 12+).
+
+## Device Profiles
+
+You can switch between **Pixel 9 Style** (decorative bezel) and **Honor X9d Native** (fullscreen) in **Settings -> Display -> Device Profile & Frame Mode**.
