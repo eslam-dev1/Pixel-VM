@@ -26,7 +26,9 @@
     <string name="quick_settings_dnd">Do Not Disturb</string>
     <string name="quick_settings_autorotate">Auto-rotate</string>
     <string name="quick_settings_battery">Battery Saver</string>
-    <string name="quick_settings_simulated">Simulated</string>
+    <string name="quick_settings_screenshot">Screenshot</string>
+    <string name="quick_settings_volume">Media Volume</string>
+    <string name="voice_search_unavailable">Voice search engine not available on this device</string>
 
     <string name="settings_display">Display</string>
     <string name="settings_notifications">Notifications</string>
@@ -71,4 +73,77 @@
     <string name="reset">Reset</string>
     <string name="bezel_toggle">Device frame bezel</string>
     <string name="bezel_desc">Show realistic rounded phone body and punch hole cutout</string>
+
+    <!-- Markup & Smart Select -->
+    <string name="markup_title">Markup</string>
+    <string name="markup_undo">Undo</string>
+    <string name="markup_redo">Redo</string>
+    <string name="markup_pen">Pen</string>
+    <string name="markup_highlighter">Highlighter</string>
+    <string name="markup_crop">Crop</string>
+    <string name="smart_select_title">Smart Select</string>
+    <string name="smart_select_subtitle">Detected items in %1$s</string>
+    <string name="smart_select_copy">Copy text</string>
+    <string name="smart_select_copied">Copied: %1$s</string>
+
+    <!-- Split Screen -->
+    <string name="split_swap_apps">Swap apps</string>
+    <string name="split_exit">Exit split screen</string>
+    <string name="split_pick_second_app">Choose second app</string>
+
+    <!-- Live Activities & Phone -->
+    <string name="phone_call_active">Simulated Call Active</string>
+    <string name="phone_mute">Mute</string>
+    <string name="phone_speaker">Speaker</string>
+    <string name="phone_end_call">End call</string>
+    <string name="phone_sim_call">Sim Call</string>
+    <string name="media_next_track">Next track</string>
+    <string name="media_playing_active">Media playing</string>
+
+    <!-- Material You Icons & Widgets -->
+    <string name="icon_style_title">Material You Icons &amp; Shapes</string>
+    <string name="themed_icons_title">Monochrome Themed Icons</string>
+    <string name="themed_icons_desc">Tint system app icons to match your wallpaper palette</string>
+    <string name="tint_pack_icons_title">Tint Icon Pack Icons</string>
+    <string name="tint_pack_icons_desc">Force Material You monochrome tint onto third-party packs</string>
+    <string name="icon_shape_label">Icon Shape</string>
+    <string name="shape_circle">Circle</string>
+    <string name="shape_squircle">Squircle</string>
+    <string name="shape_teardrop">Teardrop</string>
+    <string name="shape_rounded">Square</string>
+    <string name="widget_batteries_title">Battery</string>
+    <string name="widget_device_phone">This Phone</string>
+    <string name="battery_temp_label">Temperature</string>
+    <string name="battery_voltage_label">Voltage</string>
+    <string name="battery_health_label">Health</string>
+    <string name="battery_source_label">Power Source</string>
+    <string name="battery_tech_label">Technology</string>
+    <string name="open_system_battery_usage">Open System Battery Settings</string>
+
+    <!-- Camera -->
+    <string name="camera_flash_toggle">Flash mode</string>
+    <string name="camera_review_title">Photo Review</string>
+
+    <!-- Private Space -->
+    <string name="private_space_title">Private Space</string>
+    <string name="private_space_locked_sub">Hidden apps locked</string>
+    <string name="private_space_unlocked_sub">%1$d hidden apps unlocked</string>
+    <string name="private_space_unlock_btn">Unlock</string>
+    <string name="private_space_lock_btn">Lock</string>
+    <string name="private_space_unlock_title">Unlock Private Space</string>
+    <string name="private_space_manage_apps">Manage Private Space</string>
+    <string name="private_space_empty">No apps selected for Private Space</string>
+    <string name="private_space_pin_title">Private Space PIN</string>
+    <string name="private_space_pin_active">Dedicated Private Space PIN is ACTIVE.</string>
+    <string name="private_space_pin_default">No Private Space PIN set (unlocks with one tap).</string>
+    <string name="private_space_pin_hint">Private Space 4–6 digit PIN</string>
+
+    <!-- Circle to Search -->
+    <string name="circle_to_search_prompt">Circle or tap anything to search</string>
+    <string name="circle_to_search_close">Close Circle to Search</string>
+    <string name="circle_to_search_translate">Translate Screen</string>
+    <string name="circle_to_search_web">Search web</string>
+    <string name="circle_to_search_region_selected">Selected region • Pick or edit query</string>
+    <string name="circle_to_search_translated_mode">Screen translation active</string>
+    <string name="circle_to_search_open_translate">Open Google Translate</string>
 </resources>

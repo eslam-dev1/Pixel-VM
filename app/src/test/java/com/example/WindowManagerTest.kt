@@ -165,6 +165,8 @@ class WindowManagerTest {
 
     @Test
     fun testNotificationPostingAndDismissal() {
+        assertTrue(windowManager.notifications.value.isEmpty())
+
         windowManager.postNotification(
             id = "test_notif",
             title = "Test Notif",
@@ -178,5 +180,10 @@ class WindowManagerTest {
         windowManager.dismissNotification("test_notif")
         val updatedNotifications = windowManager.notifications.value
         assertFalse(updatedNotifications.any { it.id == "test_notif" })
+        assertTrue(updatedNotifications.isEmpty())
+
+        windowManager.postNotification("n2", "Title", "Body", "notes")
+        windowManager.clearAllNotifications()
+        assertTrue(windowManager.notifications.value.isEmpty())
     }
 }

@@ -26,7 +26,9 @@
     <string name="quick_settings_dnd">عدم الإزعاج</string>
     <string name="quick_settings_autorotate">التدوير التلقائي</string>
     <string name="quick_settings_battery">توفير شحن البطارية</string>
-    <string name="quick_settings_simulated">محاكاة</string>
+    <string name="quick_settings_screenshot">لقطة شاشة</string>
+    <string name="quick_settings_volume">مستوى صوت الوسائط</string>
+    <string name="voice_search_unavailable">محرك البحث الصوتي غير متوفر على هذا الجهاز</string>
 
     <string name="settings_display">الشاشة</string>
     <string name="settings_notifications">الإشعارات</string>
@@ -71,4 +73,77 @@
     <string name="reset">إعادة تعيين</string>
     <string name="bezel_toggle">إطار الهاتف</string>
     <string name="bezel_desc">إظهار هيكل هاتف واقعي مع فتحة كاميرا الشاشة</string>
+
+    <!-- Markup & Smart Select -->
+    <string name="markup_title">تعديل اللقطة</string>
+    <string name="markup_undo">تراجع</string>
+    <string name="markup_redo">إعادة</string>
+    <string name="markup_pen">قلم</string>
+    <string name="markup_highlighter">تمييز</string>
+    <string name="markup_crop">قص</string>
+    <string name="smart_select_title">التحديد الذكي</string>
+    <string name="smart_select_subtitle">العناصر المكتشفة في %1$s</string>
+    <string name="smart_select_copy">نسخ النص</string>
+    <string name="smart_select_copied">تم النسخ: %1$s</string>
+
+    <!-- Split Screen -->
+    <string name="split_swap_apps">تبديل التطبيقين</string>
+    <string name="split_exit">إنهاء تقسيم الشاشة</string>
+    <string name="split_pick_second_app">اختر التطبيق الثاني</string>
+
+    <!-- Live Activities & Phone -->
+    <string name="phone_call_active">مكالمة محاكاة نشطة</string>
+    <string name="phone_mute">كتم الصوت</string>
+    <string name="phone_speaker">مكبر الصوت</string>
+    <string name="phone_end_call">إنهاء المكالمة</string>
+    <string name="phone_sim_call">اتصال محاكى</string>
+    <string name="media_next_track">المقطع التالي</string>
+    <string name="media_playing_active">وسائط قيد التشغيل</string>
+
+    <!-- Material You Icons & Widgets -->
+    <string name="icon_style_title">أيقونات وأشكال Material You</string>
+    <string name="themed_icons_title">أيقونات أحادية اللون</string>
+    <string name="themed_icons_desc">تلوين أيقونات النظام بألوان الخلفية تلقائياً</string>
+    <string name="tint_pack_icons_title">تلوين حزم الأيقونات الخارجية</string>
+    <string name="tint_pack_icons_desc">تطبيق ألوان Material You على الحزم المثبتة</string>
+    <string name="icon_shape_label">شكل الأيقونة</string>
+    <string name="shape_circle">دائرة</string>
+    <string name="shape_squircle">منحني</string>
+    <string name="shape_teardrop">قطرة</string>
+    <string name="shape_rounded">مربع</string>
+    <string name="widget_batteries_title">البطارية</string>
+    <string name="widget_device_phone">هذا الهاتف</string>
+    <string name="battery_temp_label">درجة الحرارة</string>
+    <string name="battery_voltage_label">الجهد الكهربائي</string>
+    <string name="battery_health_label">الحالة الصحية</string>
+    <string name="battery_source_label">مصدر الطاقة</string>
+    <string name="battery_tech_label">التقنية</string>
+    <string name="open_system_battery_usage">فتح إعدادات البطارية في النظام</string>
+
+    <!-- Camera -->
+    <string name="camera_flash_toggle">وضع الفلاش</string>
+    <string name="camera_review_title">معاينة الصورة</string>
+
+    <!-- Private Space -->
+    <string name="private_space_title">المساحة الخاصة</string>
+    <string name="private_space_locked_sub">التطبيقات المخفية مقفلة</string>
+    <string name="private_space_unlocked_sub">%1$d تطبيقات خاصة مفتوحة</string>
+    <string name="private_space_unlock_btn">فتح</string>
+    <string name="private_space_lock_btn">قفل</string>
+    <string name="private_space_unlock_title">فتح المساحة الخاصة</string>
+    <string name="private_space_manage_apps">إدارة تطبيقات المساحة الخاصة</string>
+    <string name="private_space_empty">لا توجد تطبيقات في المساحة الخاصة</string>
+    <string name="private_space_pin_title">رمز PIN للمساحة الخاصة</string>
+    <string name="private_space_pin_active">تم تفعيل رمز PIN مخصص للمساحة الخاصة.</string>
+    <string name="private_space_pin_default">لا يوجد رمز مخصص (يفتح بنقرة واحدة).</string>
+    <string name="private_space_pin_hint">رمز المساحة الخاصة (4-6 أرقام)</string>
+
+    <!-- Circle to Search -->
+    <string name="circle_to_search_prompt">ارسم دائرة أو اضغط للبحث</string>
+    <string name="circle_to_search_close">إغلاق البحث بالدائرة</string>
+    <string name="circle_to_search_translate">ترجمة الشاشة</string>
+    <string name="circle_to_search_web">بحث في الويب</string>
+    <string name="circle_to_search_region_selected">تم تحديد المنطقة • اختر أو عدّل البحث</string>
+    <string name="circle_to_search_translated_mode">تم تفعيل ترجمة الشاشة</string>
+    <string name="circle_to_search_open_translate">فتح ترجمة Google</string>
 </resources>

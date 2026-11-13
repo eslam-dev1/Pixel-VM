@@ -22,18 +22,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.rememberAsyncImagePainter
+import com.example.R
 import com.example.data.SettingsDataStore
-import com.example.os.IconPackResolver
+import com.example.model.PixelIconShape
+import com.example.model.PixelThemeSettings
 import kotlinx.coroutines.launch
 
 @Composable
 fun IconPackSettings(
     settingsDataStore: SettingsDataStore,
     currentIconPack: String?,
+    pixelThemeSettings: PixelThemeSettings = PixelThemeSettings(),
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -47,11 +52,108 @@ fun IconPackSettings(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // Material You Monochrome & Shape Controls
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.icon_style_title),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(stringResource(R.string.themed_icons_title), fontWeight = FontWeight.Medium)
+                            Text(
+                                text = stringResource(R.string.themed_icons_desc),
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                        }
+                        Switch(
+                            checked = pixelThemeSettings.useMaterialYouMonochrome,
+                            onCheckedChange = { enabled ->
+                                scope.launch { settingsDataStore.setUseMaterialYouMonochrome(enabled) }
+                            },
+                            modifier = Modifier.testTag("themed_icons_switch")
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(stringResource(R.string.tint_pack_icons_title), fontWeight = FontWeight.Medium)
+                            Text(
+                                text = stringResource(R.string.tint_pack_icons_desc),
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                        }
+                        Switch(
+                            checked = pixelThemeSettings.tintPackIconsWithMaterialYou,
+                            onCheckedChange = { enabled ->
+                                scope.launch { settingsDataStore.setTintPackIconsWithMaterialYou(enabled) }
+                            },
+                            modifier = Modifier.testTag("tint_pack_icons_switch")
+                        )
+                    }
+
+                    Text(
+                        text = stringResource(R.string.icon_shape_label),
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        PixelIconShape.entries.forEach { shape ->
+                            val isSelected = pixelThemeSettings.iconShape == shape
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { scope.launch { settingsDataStore.setPixelIconShape(shape) } },
+                                label = {
+                                    Text(
+                                        text = when (shape) {
+                                            PixelIconShape.CIRCLE -> stringResource(R.string.shape_circle)
+                                            PixelIconShape.SQUIRCLE -> stringResource(R.string.shape_squircle)
+                                            PixelIconShape.TEARDROP -> stringResource(R.string.shape_teardrop)
+                                            PixelIconShape.ROUNDED_SQUARE -> stringResource(R.string.shape_rounded)
+                                        },
+                                        fontSize = 11.sp
+                                    )
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("icon_shape_${shape.name.lowercase()}")
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         item {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { 
+                    .clickable {
                         scope.launch { settingsDataStore.setIconPack(null) }
                     }
                     .border(
@@ -89,7 +191,7 @@ fun IconPackSettings(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { 
+                    .clickable {
                         scope.launch { settingsDataStore.setIconPack(pack.packageName) }
                     }
                     .border(
@@ -107,7 +209,7 @@ fun IconPackSettings(
                     val packIcon = remember(pack.packageName) {
                         try { context.packageManager.getApplicationIcon(pack.packageName) } catch (e: Exception) { null }
                     }
-                    
+
                     if (packIcon != null) {
                         Image(
                             painter = rememberAsyncImagePainter(packIcon),
@@ -117,7 +219,7 @@ fun IconPackSettings(
                     } else {
                         Box(modifier = Modifier.size(40.dp).background(Color.Gray, CircleShape))
                     }
-                    
+
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
                         Text(pack.label, fontWeight = FontWeight.Bold)
@@ -126,7 +228,7 @@ fun IconPackSettings(
                 }
             }
         }
-        
+
         if (installedPacks.isEmpty()) {
             item {
                 Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {

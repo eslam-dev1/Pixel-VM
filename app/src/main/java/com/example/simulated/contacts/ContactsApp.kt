@@ -1,6 +1,7 @@
 package com.example.simulated.contacts
 
 import android.Manifest
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -62,6 +63,10 @@ fun ContactsApp(
     var contacts by remember { mutableStateOf<List<DeviceContact>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedContact by remember { mutableStateOf<DeviceContact?>(null) }
+
+    BackHandler(enabled = selectedContact != null) {
+        selectedContact = null
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()

@@ -1,6 +1,13 @@
 package com.example.ui.phone
 
-import androidx.compose.animation.AnimatedVisibility
+import android.app.Activity
+import android.content.Intent
+import android.speech.RecognizerIntent
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -55,11 +62,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.data.HomeItemEntity
+import com.example.model.PixelThemeSettings
 import com.example.model.SimulatedSystemState
 import com.example.os.AppRegistry
 import com.example.os.HomeScreenManager
 import com.example.ui.components.SimulatedAppIcon
 import com.example.ui.components.AtAGlanceWidget
+import com.example.ui.components.PixelBatteryWidget
+import com.example.ui.components.PixelBottomSearchPill
+import com.example.ui.components.PixelClockHomeWidget
 import kotlinx.coroutines.launch
 
 @Composable
@@ -67,26 +78,56 @@ fun HomeScreen(
     homeItems: List<HomeItemEntity>,
     homeScreenManager: HomeScreenManager,
     systemState: SimulatedSystemState,
-    upcomingEventTitle: String? = null,
     selectedIconPack: String? = null,
+    pixelThemeSettings: PixelThemeSettings = PixelThemeSettings(),
+    hiddenAppIds: Set<String> = emptySet(),
     onOpenApp: (String) -> Unit,
     onOpenDrawer: () -> Unit,
+    onOpenDrawerWithQuery: (String) -> Unit = { onOpenDrawer() },
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     var openedFolder by remember { mutableStateOf<HomeItemEntity?>(null) }
     var itemToReorder by remember { mutableStateOf<HomeItemEntity?>(null) }
 
-    val dockItems = homeItems.filter { it.isDock }.sortedBy { it.slotIndex }
-    val gridItems = homeItems.filter { !it.isDock }.sortedBy { it.slotIndex }
+    BackHandler(enabled = openedFolder != null || itemToReorder != null) {
+        if (openedFolder != null) {
+            openedFolder = null
+        } else {
+            itemToReorder = null
+        }
+    }
 
-    // Chunk grid items into pages of up to 12 items (4 cols x 3 rows per page)
-    val pages = remember(gridItems) {
+    val voiceSearchLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val spoken = result.data
+                ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                ?.firstOrNull()
+                ?.trim()
+            if (!spoken.isNullOrEmpty()) {
+                onOpenDrawerWithQuery(spoken)
+            }
+        }
+    }
+
+    val dockItems = homeItems.filter { it.isDock }.sortedBy { it.slotIndex }
+    val gridItems = remember(homeItems, hiddenAppIds) {
+        homeItems
+            .filter { !it.isDock && (it.targetAppId == null || it.targetAppId !in hiddenAppIds) }
+            .sortedBy { it.slotIndex }
+    }
+
+    // Chunk grid items into pages of up to 12 items + 1 dedicated Pixel Widgets page
+    val appPages = remember(gridItems) {
         val chunked = gridItems.chunked(12)
         if (chunked.isEmpty()) listOf(emptyList()) else chunked
     }
+    val totalPages = appPages.size + 1
 
-    val pagerState = rememberPagerState(pageCount = { pages.size })
+    val pagerState = rememberPagerState(pageCount = { totalPages })
 
     Box(
         modifier = modifier
@@ -112,7 +153,7 @@ fun HomeScreen(
             // Extensible "At a Glance" Widget with HorizontalPager
             AtAGlanceWidget(systemState = systemState)
 
-            // Paged App Grid (HorizontalPager)
+            // Paged App Grid & Pixel Widgets (HorizontalPager)
             Column(modifier = Modifier.weight(1f)) {
                 HorizontalPager(
                     state = pagerState,
@@ -120,61 +161,82 @@ fun HomeScreen(
                         .fillMaxWidth()
                         .weight(1f)
                 ) { page ->
-                    val pageItems = pages.getOrElse(page) { emptyList() }
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(4),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        items(pageItems, key = { it.id }) { item ->
-                            HomeGridCell(
-                                item = item,
-                                iconPackPackage = selectedIconPack,
-                                onClick = {
-                                    if (item.itemType == "FOLDER") {
-                                        openedFolder = item
-                                    } else if (item.targetAppId != null) {
-                                        onOpenApp(item.targetAppId)
-                                    }
-                                },
-                                onLongClick = {
-                                    if (itemToReorder == null) {
-                                        itemToReorder = item
-                                    } else {
-                                        scope.launch {
-                                            homeScreenManager.swapItems(itemToReorder!!, item)
-                                            itemToReorder = null
+                    if (page < appPages.size) {
+                        val pageItems = appPages.getOrElse(page) { emptyList() }
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(4),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            items(pageItems, key = { it.id }) { item ->
+                                HomeGridCell(
+                                    item = item,
+                                    iconPackPackage = selectedIconPack,
+                                    pixelThemeSettings = pixelThemeSettings,
+                                    onClick = {
+                                        if (item.itemType == "FOLDER") {
+                                            openedFolder = item
+                                        } else if (item.targetAppId != null) {
+                                            onOpenApp(item.targetAppId)
                                         }
-                                    }
-                                },
-                                isHighlighted = itemToReorder?.id == item.id
+                                    },
+                                    onLongClick = {
+                                        if (itemToReorder == null) {
+                                            itemToReorder = item
+                                        } else {
+                                            scope.launch {
+                                                homeScreenManager.swapItems(itemToReorder!!, item)
+                                                itemToReorder = null
+                                            }
+                                        }
+                                    },
+                                    isHighlighted = itemToReorder?.id == item.id
+                                )
+                            }
+                        }
+                    } else {
+                        // Dedicated Material You Widgets Page
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(top = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            PixelBatteryWidget(
+                                systemState = systemState,
+                                onClick = { onOpenApp("settings") }
+                            )
+                            PixelClockHomeWidget(
+                                systemState = systemState,
+                                onClick = { onOpenApp("clock") }
                             )
                         }
                     }
                 }
 
-                // Page indicator dots when > 1 page
-                if (pages.size > 1) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        for (i in pages.indices) {
-                            val isSelected = pagerState.currentPage == i
-                            Box(
-                                modifier = Modifier
-                                    .padding(horizontal = 3.dp)
-                                    .size(if (isSelected) 8.dp else 6.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isSelected) Color.White else Color.White.copy(alpha = 0.4f))
-                            )
-                        }
+                // Page indicator dots & quick jump to Widgets
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    for (i in 0 until totalPages) {
+                        val isSelected = pagerState.currentPage == i
+                        Box(
+                            modifier = Modifier
+                                .padding(horizontal = 4.dp)
+                                .size(if (isSelected) 8.dp else 6.dp)
+                                .clip(CircleShape)
+                                .background(if (isSelected) Color.White else Color.White.copy(alpha = 0.4f))
+                                .clickable {
+                                    scope.launch { pagerState.animateScrollToPage(i) }
+                                }
+                        )
                     }
                 }
             }
@@ -183,57 +245,38 @@ fun HomeScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 12.dp),
+                    .padding(bottom = 18.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Search Pill
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                        .clip(RoundedCornerShape(25.dp))
-                        .background(Color.White.copy(alpha = 0.25f))
-                        .clickable(onClick = onOpenDrawer)
-                        .padding(horizontal = 16.dp)
-                        .testTag("home_search_pill"),
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    Icons.Default.Search,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimary,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = stringResource(R.string.search_apps),
-                                color = Color.White.copy(alpha = 0.9f),
-                                fontSize = 15.sp
-                            )
+                PixelBottomSearchPill(
+                    onSearchClick = onOpenDrawer,
+                    onVoiceClick = {
+                        val speechIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                            putExtra(RecognizerIntent.EXTRA_PROMPT, context.getString(R.string.search_apps))
                         }
-
-                        Icon(
-                            Icons.Default.Mic,
-                            contentDescription = "Voice",
-                            tint = Color.White.copy(alpha = 0.85f),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
+                        try {
+                            if (speechIntent.resolveActivity(context.packageManager) != null) {
+                                voiceSearchLauncher.launch(speechIntent)
+                            } else {
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.voice_search_unavailable),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        } catch (_: Exception) {
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.voice_search_unavailable),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    },
+                    onLensClick = { onOpenApp("camera") },
+                    modifier = Modifier.testTag("home_search_pill")
+                )
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -249,6 +292,7 @@ fun HomeScreen(
                                 appId = appId,
                                 size = 56.dp,
                                 iconPackPackage = selectedIconPack,
+                                pixelThemeSettings = pixelThemeSettings,
                                 modifier = Modifier
                                     .clickable { onOpenApp(appId) }
                                     .testTag("dock_app_$appId")
@@ -262,7 +306,7 @@ fun HomeScreen(
 
     // Folder dialog
     openedFolder?.let { folder ->
-        val appIds = folder.folderAppIdsCsv?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
+        val appIds = folder.folderAppIdsCsv?.split(",")?.filter { it.isNotBlank() && it !in hiddenAppIds } ?: emptyList()
         AlertDialog(
             onDismissRequest = { openedFolder = null },
             title = { Text(folder.folderTitle ?: "Folder") },
@@ -282,7 +326,12 @@ fun HomeScreen(
                                 onOpenApp(appId)
                             }
                         ) {
-                            SimulatedAppIcon(appId = appId, size = 50.dp, iconPackPackage = selectedIconPack)
+                            SimulatedAppIcon(
+                                appId = appId,
+                                size = 50.dp,
+                                iconPackPackage = selectedIconPack,
+                                pixelThemeSettings = pixelThemeSettings
+                            )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = appDef?.let { stringResource(it.titleRes) } ?: appId,
@@ -303,10 +352,12 @@ fun HomeScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun HomeGridCell(
     item: HomeItemEntity,
     iconPackPackage: String? = null,
+    pixelThemeSettings: PixelThemeSettings = PixelThemeSettings(),
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     isHighlighted: Boolean
@@ -316,7 +367,10 @@ private fun HomeGridCell(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .clickable(onClick = onClick)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
             .padding(4.dp)
     ) {
         Box(
@@ -351,6 +405,7 @@ private fun HomeGridCell(
                     appId = item.targetAppId,
                     size = 54.dp,
                     iconPackPackage = iconPackPackage,
+                    pixelThemeSettings = pixelThemeSettings,
                     modifier = Modifier.testTag("home_app_${item.targetAppId}")
                 )
             }

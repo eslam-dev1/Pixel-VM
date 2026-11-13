@@ -7,33 +7,16 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Fingerprint
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material.icons.rounded.Fingerprint
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -49,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.model.SimulatedNotification
 import com.example.model.SimulatedSystemState
+import com.example.ui.modifiers.pixelIconTouchEffect
 
 @Composable
 fun LockScreen(
@@ -57,17 +41,6 @@ fun LockScreen(
     onUnlockTriggered: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "unlock_pulse")
-    val offsetY by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = -10f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "offsetY"
-    )
-
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -85,38 +58,45 @@ fun LockScreen(
                     }
                 )
             }
-            .padding(horizontal = 24.dp, vertical = 20.dp)
+            .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.35f))
+            .padding(24.dp)
             .testTag("lock_screen_container")
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = if (notifications.isNotEmpty()) Alignment.Start else Alignment.CenterHorizontally,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 64.dp)
         ) {
-            Spacer(modifier = Modifier.height(28.dp))
+            // Clock Display
+            if (notifications.isEmpty()) {
+                Text(
+                    text = systemState.timeFormatted.replace(":", "\n"),
+                    style = MaterialTheme.typography.displayLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        lineHeight = MaterialTheme.typography.displayLarge.fontSize * 0.9f
+                    ),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.testTag("lock_screen_time")
+                )
+            } else {
+                Text(
+                    text = systemState.timeFormatted,
+                    style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.testTag("lock_screen_time")
+                )
+                Text(
+                    text = systemState.dateFormatted,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                    modifier = Modifier.testTag("lock_screen_date")
+                )
+            }
 
-            // Large Time Display
-            Text(
-                text = systemState.timeFormatted,
-                fontSize = 78.sp,
-                fontWeight = FontWeight.Light,
-                color = Color.White.copy(alpha = 0.95f),
-                letterSpacing = (-2).sp,
-                modifier = Modifier.testTag("lock_screen_time")
-            )
-
-            // Date Display
-            Text(
-                text = systemState.dateFormatted,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.White.copy(alpha = 0.8f),
-                modifier = Modifier.testTag("lock_screen_date")
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // Lock screen notifications
+            // Notification List
             if (notifications.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(24.dp))
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -170,41 +150,29 @@ fun LockScreen(
             }
         }
 
-        // Bottom section: Fingerprint sensor & swipe up hint
-        Column(
+        // Fingerprint sensor
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primaryContainer,
+            tonalElevation = 8.dp,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(bottom = 48.dp)
+                .size(68.dp)
+                .pixelIconTouchEffect(
+                    onClick = onUnlockTriggered
+                )
+                .testTag("fingerprint_sensor")
         ) {
-            // Simulated Fingerprint Sensor (under-display optical scanner style)
-            Box(
-                modifier = Modifier
-                    .offset(y = offsetY.dp)
-                    .size(56.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.22f))
-                    .clickable(onClick = onUnlockTriggered)
-                    .testTag("fingerprint_sensor"),
-                contentAlignment = Alignment.Center
-            ) {
+            Box(contentAlignment = Alignment.Center) {
                 Icon(
-                    imageVector = Icons.Default.Fingerprint,
-                    contentDescription = "Simulated Fingerprint Sensor",
-                    tint = Color.White,
-                    modifier = Modifier.size(32.dp)
+                    imageVector = Icons.Rounded.Fingerprint,
+                    contentDescription = "Unlock Pixel",
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(36.dp)
                 )
             }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Text(
-                text = stringResource(R.string.swipe_up_to_unlock),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.White.copy(alpha = 0.85f),
-                modifier = Modifier.testTag("lock_swipe_hint")
-            )
         }
     }
 }
+

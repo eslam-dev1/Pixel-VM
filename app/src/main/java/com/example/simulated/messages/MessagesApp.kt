@@ -1,5 +1,6 @@
 package com.example.simulated.messages
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -60,6 +61,10 @@ fun MessagesApp(
     var contacts by remember { mutableStateOf<List<DeviceContact>>(emptyList()) }
     var recipientNumber by remember { mutableStateOf("") }
     var messageBody by remember { mutableStateOf("") }
+
+    BackHandler(enabled = isComposing) {
+        isComposing = false
+    }
 
     LaunchedEffect(Unit) {
         if (ContactsHelper.hasContactsPermission(context)) {

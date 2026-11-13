@@ -4,6 +4,8 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.view.KeyEvent
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.material3.Button
 import androidx.compose.foundation.background
@@ -23,8 +25,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.BatteryStd
@@ -51,7 +55,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -74,11 +77,14 @@ import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.data.SettingsDataStore
 import com.example.data.SystemSettings
+import com.example.os.BatteryState
 import com.example.os.SystemStateHolder
+import com.example.os.WindowManager
 import com.example.ui.theme.WallpaperTheme
 import com.example.ui.theme.Wallpapers
 import com.example.ui.settings.IconPackSettings
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 private enum class SettingsSection {
     HOME, DISPLAY, WALLPAPER, NOTIFICATIONS, SOUND, BATTERY, SECURITY, RELIABILITY, ICON_PACK, ABOUT
@@ -88,14 +94,20 @@ private enum class SettingsSection {
 fun SettingsApp(
     settingsDataStore: SettingsDataStore,
     systemStateHolder: SystemStateHolder,
+    windowManager: WindowManager? = null,
     onResetPhone: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
     val settings by settingsDataStore.settingsFlow.collectAsState(initial = SystemSettings())
     val systemState by systemStateHolder.state.collectAsState()
+    val batteryTelemetry by systemStateHolder.batteryTelemetry.collectAsState()
     var currentSection by remember { mutableStateOf(SettingsSection.HOME) }
     var showResetDialog by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = currentSection != SettingsSection.HOME) {
+        currentSection = SettingsSection.HOME
+    }
 
     Column(
         modifier = modifier
@@ -281,13 +293,18 @@ fun SettingsApp(
             }
 
             SettingsSection.BATTERY -> {
-                BatterySettingsScreen(systemState = systemState)
+                BatterySettingsScreen(
+                    systemState = systemState,
+                    batteryTelemetry = batteryTelemetry
+                )
             }
 
             SettingsSection.SECURITY -> {
                 SecuritySettingsScreen(
                     currentHashedPin = settings.hashedPin,
-                    onSetPin = { pin -> scope.launch { settingsDataStore.setPin(pin) } }
+                    onSetPin = { pin -> scope.launch { settingsDataStore.setPin(pin) } },
+                    privateSpaceHasPin = settings.privateSpacePinHash != null,
+                    onSetPrivateSpacePin = { pin -> scope.launch { settingsDataStore.setPrivateSpacePin(pin) } }
                 )
             }
 
@@ -298,7 +315,8 @@ fun SettingsApp(
             SettingsSection.ICON_PACK -> {
                 IconPackSettings(
                     settingsDataStore = settingsDataStore,
-                    currentIconPack = settings.selectedIconPack
+                    currentIconPack = settings.selectedIconPack,
+                    pixelThemeSettings = settings.toPixelThemeSettings()
                 )
             }
 
@@ -397,6 +415,7 @@ private fun DisplaySettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -786,10 +805,12 @@ private fun SoundSettingsScreen(
     currentVolume: Float
 ) {
     var volume by remember(currentVolume) { mutableFloatStateOf(currentVolume) }
+    val isMediaPlaying by systemStateHolder.isDeviceMediaPlaying.collectAsState()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -800,7 +821,7 @@ private fun SoundSettingsScreen(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = "Media Volume",
+                    text = stringResource(R.string.quick_settings_volume),
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp
                 )
@@ -821,14 +842,44 @@ private fun SoundSettingsScreen(
                 }
             }
         }
+
+        if (isMediaPlaying) {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = stringResource(R.string.media_playing_active),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { systemStateHolder.dispatchMediaKey(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) }) {
+                            Text(stringResource(R.string.pause))
+                        }
+                        OutlinedButton(onClick = { systemStateHolder.dispatchMediaKey(KeyEvent.KEYCODE_MEDIA_NEXT) }) {
+                            Text(stringResource(R.string.media_next_track))
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun BatterySettingsScreen(systemState: com.example.model.SimulatedSystemState) {
+private fun BatterySettingsScreen(
+    systemState: com.example.model.SimulatedSystemState,
+    batteryTelemetry: BatteryState
+) {
+    val context = LocalContext.current
+
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -848,47 +899,97 @@ private fun BatterySettingsScreen(systemState: com.example.model.SimulatedSystem
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 Text(
-                    text = if (systemState.isCharging) "Charging (Real Device State)" else "Discharging (Real Device State)",
+                    text = if (systemState.isCharging) "Charging (${batteryTelemetry.pluggedSource})" else "On ${batteryTelemetry.pluggedSource}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                 )
             }
         }
 
-        // 24-Hour Hourly Battery Usage History Chart
-        com.example.ui.components.BatteryHistoryChart(
-            currentBatteryPercent = systemState.batteryPercent,
-            isCurrentlyCharging = systemState.isCharging
-        )
-
         Card(
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(text = "Battery Saver", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Text(
-                    text = "Reduces animations and conserves simulated power consumption.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                BatteryTelemetryRow(
+                    label = stringResource(R.string.battery_health_label),
+                    value = batteryTelemetry.healthLabel
                 )
+                BatteryTelemetryRow(
+                    label = stringResource(R.string.battery_source_label),
+                    value = batteryTelemetry.pluggedSource
+                )
+                BatteryTelemetryRow(
+                    label = stringResource(R.string.battery_temp_label),
+                    value = if (batteryTelemetry.temperatureCelsius > 0f) {
+                        String.format(Locale.getDefault(), "%.1f °C", batteryTelemetry.temperatureCelsius)
+                    } else "--"
+                )
+                BatteryTelemetryRow(
+                    label = stringResource(R.string.battery_voltage_label),
+                    value = if (batteryTelemetry.voltageMv > 0) "${batteryTelemetry.voltageMv} mV" else "--"
+                )
+                if (batteryTelemetry.technology.isNotBlank()) {
+                    BatteryTelemetryRow(
+                        label = stringResource(R.string.battery_tech_label),
+                        value = batteryTelemetry.technology
+                    )
+                }
             }
         }
+
+        OutlinedButton(
+            onClick = {
+                val usageIntent = Intent(Intent.ACTION_POWER_USAGE_SUMMARY)
+                if (!safeStartActivity(context, usageIntent)) {
+                    safeStartActivity(context, Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS))
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(stringResource(R.string.open_system_battery_usage))
+        }
+    }
+}
+
+@Composable
+private fun BatteryTelemetryRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
 @Composable
 private fun SecuritySettingsScreen(
     currentHashedPin: String?,
-    onSetPin: (String?) -> Unit
+    onSetPin: (String?) -> Unit,
+    privateSpaceHasPin: Boolean = false,
+    onSetPrivateSpacePin: (String?) -> Unit = {}
 ) {
     var newPin by remember { mutableStateOf("") }
     var statusMessage by remember { mutableStateOf("") }
+    var privatePin by remember { mutableStateOf("") }
+    var privatePinMsg by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -959,6 +1060,75 @@ private fun SecuritySettingsScreen(
                 }
             }
         }
+
+        // Private Space PIN configuration
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = stringResource(R.string.private_space_pin_title),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+                Text(
+                    text = if (privateSpaceHasPin) stringResource(R.string.private_space_pin_active) else stringResource(R.string.private_space_pin_default),
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = privatePin,
+                    onValueChange = { if (it.length <= 6 && it.all { c -> c.isDigit() }) privatePin = it },
+                    label = { Text(stringResource(R.string.private_space_pin_hint)) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            if (privatePin.length >= 4) {
+                                onSetPrivateSpacePin(privatePin)
+                                privatePinMsg = "Private Space PIN updated!"
+                                privatePin = ""
+                            } else {
+                                privatePinMsg = "PIN must be at least 4 digits"
+                            }
+                        }
+                    ) {
+                        Text("Set PIN")
+                    }
+
+                    if (privateSpaceHasPin) {
+                        OutlinedButton(
+                            onClick = {
+                                onSetPrivateSpacePin(null)
+                                privatePinMsg = "Private Space PIN cleared."
+                                privatePin = ""
+                            }
+                        ) {
+                            Text("Remove PIN")
+                        }
+                    }
+                }
+
+                if (privatePinMsg.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = privatePinMsg,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -967,6 +1137,7 @@ private fun AboutPhoneScreen(bodyColor: com.example.model.BodyColor) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -1025,6 +1196,7 @@ private fun NotificationSettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -1160,8 +1332,8 @@ private fun ReliabilitySettingsScreen() {
             ReliabilityStep(
                 step = "3. Lock in Recents",
                 description = "Open the system Recents screen (swipe up and hold), find PixelSim, and swipe down on the app card to lock it (a padlock icon should appear). This prevents the 'Clear All' action from killing the app.",
-                buttonText = "View Guide Only",
-                onClick = { /* Informational only */ }
+                buttonText = null,
+                onClick = null
             )
         }
 
@@ -1183,17 +1355,15 @@ private fun ReliabilitySettingsScreen() {
             ReliabilityStep(
                 step = "5. Exact Alarms",
                 description = "If you are on Android 12 or higher, PixelSim needs permission to schedule exact alarms for the Clock app to be precise.",
-                buttonText = "Open Alarm Permissions",
-                onClick = {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                buttonText = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) "Open Alarm Permissions" else null,
+                onClick = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    {
                         val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
                             data = Uri.fromParts("package", context.packageName, null)
                         }
                         safeStartActivity(context, intent)
-                    } else {
-                        // Not needed below Android 12
                     }
-                }
+                } else null
             )
         }
     }
@@ -1203,8 +1373,8 @@ private fun ReliabilitySettingsScreen() {
 private fun ReliabilityStep(
     step: String,
     description: String,
-    buttonText: String,
-    onClick: () -> Unit
+    buttonText: String? = null,
+    onClick: (() -> Unit)? = null
 ) {
     Card(
         shape = RoundedCornerShape(16.dp),
@@ -1219,13 +1389,15 @@ private fun ReliabilityStep(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
             )
-            Spacer(modifier = Modifier.height(12.dp))
-            Button(
-                onClick = onClick,
-                modifier = Modifier.align(Alignment.End),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text(buttonText)
+            if (buttonText != null && onClick != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = onClick,
+                    modifier = Modifier.align(Alignment.End),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(buttonText)
+                }
             }
         }
     }

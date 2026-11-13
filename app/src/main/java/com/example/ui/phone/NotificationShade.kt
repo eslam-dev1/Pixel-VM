@@ -1,6 +1,12 @@
 package com.example.ui.phone
 
-import androidx.compose.animation.AnimatedVisibility
+import android.content.Context
+import android.content.Intent
+import android.os.Build
+import android.provider.Settings
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -28,12 +34,14 @@ import androidx.compose.material.icons.filled.BrightnessLow
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DoNotDisturb
 import androidx.compose.material.icons.filled.FlashlightOn
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.Screenshot
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Wifi
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -43,11 +51,18 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -61,7 +76,7 @@ import com.example.os.SystemStateHolder
 private data class QuickSettingTile(
     val id: String,
     val title: String,
-    val isRealFeature: Boolean,
+    val statusText: String,
     val isActive: Boolean,
     val icon: ImageVector,
     val onToggle: () -> Unit
@@ -76,32 +91,52 @@ fun NotificationShade(
     onClearAllNotifications: () -> Unit,
     onOpenSettings: () -> Unit,
     onClose: () -> Unit,
+    onTakeMarkupScreenshot: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val view = androidx.compose.ui.platform.LocalView.current
+    val view = LocalView.current
+
+    var isExpanded by remember { mutableStateOf(true) }
+    val expansionProgress by animateFloatAsState(
+        targetValue = if (isExpanded) 1.0f else 0.0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "qs_drawer_expansion"
+    )
 
     val tiles = listOf(
         QuickSettingTile(
             id = "wifi",
             title = stringResource(R.string.quick_settings_wifi),
-            isRealFeature = true,
+            statusText = if (systemState.isWifiConnected) "Connected" else "Offline",
             isActive = systemState.isWifiConnected,
             icon = Icons.Default.Wifi,
-            onToggle = { systemStateHolder.toggleWifi() }
+            onToggle = {
+                val action = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    Settings.Panel.ACTION_INTERNET_CONNECTIVITY
+                } else {
+                    Settings.ACTION_WIFI_SETTINGS
+                }
+                launchSystemPanelOrSettings(context, action, Settings.ACTION_WIFI_SETTINGS)
+            }
         ),
         QuickSettingTile(
             id = "bluetooth",
             title = stringResource(R.string.quick_settings_bluetooth),
-            isRealFeature = false,
+            statusText = if (systemState.isBluetoothEnabled) "On" else "Settings",
             isActive = systemState.isBluetoothEnabled,
             icon = Icons.Default.Bluetooth,
-            onToggle = { systemStateHolder.toggleBluetooth() }
+            onToggle = {
+                launchSystemPanelOrSettings(context, Settings.ACTION_BLUETOOTH_SETTINGS, Settings.ACTION_SETTINGS)
+            }
         ),
         QuickSettingTile(
             id = "flashlight",
             title = stringResource(R.string.quick_settings_flashlight),
-            isRealFeature = true,
+            statusText = if (systemState.isFlashlightOn) "On" else "Off",
             isActive = systemState.isFlashlightOn,
             icon = Icons.Default.FlashlightOn,
             onToggle = { systemStateHolder.toggleFlashlight() }
@@ -109,30 +144,65 @@ fun NotificationShade(
         QuickSettingTile(
             id = "dnd",
             title = stringResource(R.string.quick_settings_dnd),
-            isRealFeature = false,
+            statusText = if (systemState.isDndEnabled) "On" else "Off",
             isActive = systemState.isDndEnabled,
             icon = Icons.Default.DoNotDisturb,
-            onToggle = { systemStateHolder.toggleDnd() }
+            onToggle = {
+                if (systemStateHolder.canControlDndDirectly()) {
+                    systemStateHolder.toggleDnd()
+                } else {
+                    launchSystemPanelOrSettings(
+                        context,
+                        Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS,
+                        Settings.ACTION_SOUND_SETTINGS
+                    )
+                }
+            }
         ),
         QuickSettingTile(
-            id = "screenshot",
-            title = "Screenshot",
-            isRealFeature = true,
-            isActive = false,
-            icon = Icons.Default.Screenshot,
+            id = "autorotate",
+            title = stringResource(R.string.quick_settings_autorotate),
+            statusText = if (systemState.isAutoRotateEnabled) "On" else "Off",
+            isActive = systemState.isAutoRotateEnabled,
+            icon = Icons.Default.ScreenRotation,
             onToggle = {
-                com.example.util.ScreenshotHelper.takeScreenshotAndSave(context, view.rootView) {
-                    onClose()
+                if (systemStateHolder.canWriteSystemSettings()) {
+                    systemStateHolder.toggleAutoRotate()
+                } else {
+                    launchSystemPanelOrSettings(
+                        context,
+                        Settings.ACTION_DISPLAY_SETTINGS,
+                        Settings.ACTION_SETTINGS
+                    )
                 }
             }
         ),
         QuickSettingTile(
             id = "battery",
             title = stringResource(R.string.quick_settings_battery),
-            isRealFeature = false,
+            statusText = if (systemState.isBatterySaverEnabled) "Active" else "${systemState.batteryPercent}%",
             isActive = systemState.isBatterySaverEnabled,
             icon = Icons.Default.BatterySaver,
-            onToggle = { systemStateHolder.toggleBatterySaver() }
+            onToggle = {
+                launchSystemPanelOrSettings(context, Settings.ACTION_BATTERY_SAVER_SETTINGS, Settings.ACTION_SETTINGS)
+            }
+        ),
+        QuickSettingTile(
+            id = "screenshot",
+            title = stringResource(R.string.quick_settings_screenshot),
+            statusText = stringResource(R.string.markup_title),
+            isActive = false,
+            icon = Icons.Default.Screenshot,
+            onToggle = {
+                if (onTakeMarkupScreenshot != null) {
+                    onClose()
+                    onTakeMarkupScreenshot()
+                } else {
+                    com.example.util.ScreenshotHelper.takeScreenshotAndSave(context, view.rootView) {
+                        onClose()
+                    }
+                }
+            }
         )
     )
 
@@ -166,6 +236,16 @@ fun NotificationShade(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = { isExpanded = !isExpanded },
+                        modifier = Modifier.testTag("qs_expand_toggle_btn")
+                    ) {
+                        Icon(
+                            if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = if (isExpanded) "Collapse Quick Settings" else "Expand Quick Settings",
+                            tint = Color.White
+                        )
+                    }
                     IconButton(onClick = onOpenSettings, modifier = Modifier.testTag("shade_settings_btn")) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
                     }
@@ -175,16 +255,22 @@ fun NotificationShade(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Quick Settings 2-column Grid
+            // Quick Settings Grid with Spring Animation Transition
+            val displayedTiles = if (expansionProgress < 0.2f) tiles.take(4) else tiles
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer(
+                        alpha = 0.6f + (expansionProgress * 0.4f),
+                        scaleY = 0.85f + (expansionProgress * 0.15f)
+                    ),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                items(tiles, key = { it.id }) { tile ->
+                items(displayedTiles, key = { it.id }) { tile ->
                     Box(
                         modifier = Modifier
                             .height(60.dp)
@@ -213,9 +299,9 @@ fun NotificationShade(
                                     color = if (tile.isActive) MaterialTheme.colorScheme.onPrimary else Color.White
                                 )
                                 Text(
-                                    text = if (tile.isRealFeature) "Device" else "Simulated",
+                                    text = tile.statusText,
                                     fontSize = 10.sp,
-                                    color = if (tile.isActive) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.75f) else Color.White.copy(alpha = 0.5f)
+                                    color = if (tile.isActive) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.78f) else Color.White.copy(alpha = 0.55f)
                                 )
                             }
                         }
@@ -223,9 +309,9 @@ fun NotificationShade(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // Brightness slider
+            // Window Brightness slider
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -248,7 +334,30 @@ fun NotificationShade(
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            // Real Device Media Volume slider
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.VolumeUp,
+                    contentDescription = stringResource(R.string.quick_settings_volume),
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Slider(
+                    value = systemState.volumePercent,
+                    onValueChange = { systemStateHolder.setVolume(it) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("qs_volume_slider")
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
 
             // Notifications header
             Row(
@@ -257,7 +366,7 @@ fun NotificationShade(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Notifications",
+                    text = stringResource(R.string.settings_notifications),
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White.copy(alpha = 0.85f)
@@ -274,7 +383,7 @@ fun NotificationShade(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             // Notifications List
             if (notifications.isEmpty()) {
@@ -376,5 +485,30 @@ fun NotificationShade(
                 )
             }
         }
+    }
+}
+
+private fun launchSystemPanelOrSettings(
+    context: Context,
+    primaryAction: String,
+    fallbackAction: String
+) {
+    val intent = Intent(primaryAction).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    try {
+        if (intent.resolveActivity(context.packageManager) != null) {
+            context.startActivity(intent)
+        } else {
+            context.startActivity(Intent(fallbackAction).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            })
+        }
+    } catch (_: Exception) {
+        try {
+            context.startActivity(Intent(Settings.ACTION_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            })
+        } catch (_: Exception) {}
     }
 }

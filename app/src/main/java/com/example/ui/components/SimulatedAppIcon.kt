@@ -27,11 +27,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+
+import com.example.model.PixelThemeSettings
+import com.example.ui.iconpack.PixelLiveClockIcon
 
 @Composable
 fun SimulatedAppIcon(
@@ -39,11 +44,12 @@ fun SimulatedAppIcon(
     size: Dp = 56.dp,
     modifier: Modifier = Modifier,
     useThemedMonochrome: Boolean = false,
-    iconPackPackage: String? = null
+    iconPackPackage: String? = null,
+    pixelThemeSettings: PixelThemeSettings = PixelThemeSettings()
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val resolver = remember(context) { com.example.di.IconPackModule.provideIconPackResolver(context) }
-    
+
     var isPressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.80f else 1.0f,
@@ -68,6 +74,11 @@ fun SimulatedAppIcon(
             scaleY = scale
         )
 
+    val clipShape = remember(pixelThemeSettings.iconShape, size) {
+        PixelShapeHelper.toComposeShape(pixelThemeSettings.iconShape, size)
+    }
+    val effectiveMonochrome = useThemedMonochrome || pixelThemeSettings.useMaterialYouMonochrome
+
     // Map simulator IDs to common package/activity names for icon pack matching
     val virtualComponentName = remember(appId) {
         when (appId) {
@@ -76,7 +87,7 @@ fun SimulatedAppIcon(
             "camera" -> "com.google.android.GoogleCamera" to "com.android.camera.CameraLauncher"
             "clock" -> "com.google.android.deskclock" to "com.android.deskclock.DeskClock"
             "calculator" -> "com.google.android.calculator" to "com.android.calculator2.Calculator"
-            "notes" -> "com.google.android.keep" to "com.google.android.apps.notes.MainActivity"
+            "notes" -> "com.google.android.keep" to "com.android.apps.notes.MainActivity"
             "gallery" -> "com.google.android.apps.photos" to "com.google.android.apps.photos.home.HomeActivity"
             "settings" -> "com.android.settings" to "com.android.settings.Settings"
             "files" -> "com.google.android.apps.nbu.files" to "com.google.android.apps.nbu.files.home.HomeActivity"
@@ -86,18 +97,37 @@ fun SimulatedAppIcon(
         }
     }
 
-    val customIcon = remember(appId, iconPackPackage) {
-        resolver.getIcon(virtualComponentName.first, virtualComponentName.second, iconPackPackage)
+    val customBitmap = remember(appId, iconPackPackage, pixelThemeSettings.tintPackIconsWithMaterialYou) {
+        resolver.getPackIconBitmapOrNull(
+            packageName = virtualComponentName.first,
+            className = virtualComponentName.second,
+            packPackageName = iconPackPackage,
+            forceMonochrome = pixelThemeSettings.tintPackIconsWithMaterialYou
+        )
     }
 
-    if (customIcon != null) {
+    if (customBitmap != null) {
         androidx.compose.foundation.Image(
-            painter = coil.compose.rememberAsyncImagePainter(customIcon),
+            bitmap = customBitmap.asImageBitmap(),
             contentDescription = null,
+            contentScale = ContentScale.Crop,
             modifier = pressModifier
                 .size(size)
-                .clip(RoundedCornerShape(size * 0.28f))
+                .clip(clipShape)
         )
+    } else if (appId == "clock") {
+        Box(
+            modifier = pressModifier
+                .size(size)
+                .clip(clipShape),
+            contentAlignment = Alignment.Center
+        ) {
+            PixelLiveClockIcon(
+                iconSize = size,
+                smoothSecondHand = true,
+                useMaterialYouTheme = effectiveMonochrome
+            )
+        }
     } else {
         val (icon, bgColors, fgColor) = when (appId) {
             "phone" -> Triple(Icons.Default.Call, listOf(Color(0xFF2E7D32), Color(0xFF4CAF50)), Color.White)
@@ -114,16 +144,15 @@ fun SimulatedAppIcon(
             else -> Triple(Icons.Default.Folder, listOf(Color(0xFF546E7A), Color(0xFF78909C)), Color.White)
         }
 
-        val cornerRadius = size * 0.28f
         val iconSize = size * 0.52f
 
-        val finalBackground = if (useThemedMonochrome) {
+        val finalBackground = if (effectiveMonochrome) {
             Modifier.background(MaterialTheme.colorScheme.primaryContainer)
         } else {
             Modifier.background(Brush.linearGradient(bgColors))
         }
 
-        val finalTint = if (useThemedMonochrome) {
+        val finalTint = if (effectiveMonochrome) {
             MaterialTheme.colorScheme.onPrimaryContainer
         } else {
             fgColor
@@ -132,7 +161,7 @@ fun SimulatedAppIcon(
         Box(
             modifier = pressModifier
                 .size(size)
-                .clip(RoundedCornerShape(cornerRadius))
+                .clip(clipShape)
                 .then(finalBackground),
             contentAlignment = Alignment.Center
         ) {

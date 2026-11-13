@@ -12,12 +12,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -162,7 +164,7 @@ fun CalendarApp(
 
             if (selectedTab == 0) {
                 // Month View
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
                     // Month Navigation header
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -207,7 +209,9 @@ fun CalendarApp(
 
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(7),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 280.dp)
                     ) {
                         items((0 until totalSlots).toList()) { slot ->
                             val dayNum = slot - firstDayOfWeek + 1
@@ -282,13 +286,24 @@ fun CalendarApp(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     if (selectedDateEvents.isEmpty()) {
-                        Text(
-                            text = "No events scheduled for this day.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth(),
+                            contentAlignment = Alignment.TopStart
+                        ) {
+                            Text(
+                                text = "No events scheduled for this day.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     } else {
-                        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        LazyColumn(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(bottom = 84.dp)
+                        ) {
                             items(selectedDateEvents) { event ->
                                 EventItemCard(event = event)
                             }
@@ -340,7 +355,8 @@ fun CalendarApp(
                     } else {
                         LazyColumn(
                             modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(bottom = 84.dp)
                         ) {
                             items(allEvents) { event ->
                                 EventItemCard(event = event)

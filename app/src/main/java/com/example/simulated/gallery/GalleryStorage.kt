@@ -42,10 +42,10 @@ object GalleryStorage {
         }
     }
 
-    fun savePhoto(context: Context, bytes: ByteArray): GalleryPhoto {
+    fun savePhoto(context: Context, bytes: ByteArray, prefix: String = "IMG", ext: String = "jpg"): GalleryPhoto {
         val dir = getPhotosDirectory(context)
-        val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-        val fileName = "IMG_$timeStamp.jpg"
+        val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
+        val fileName = "${prefix}_$timeStamp.$ext"
         val file = File(dir, fileName)
         FileOutputStream(file).use { it.write(bytes) }
 
@@ -55,6 +55,12 @@ object GalleryStorage {
             dateAdded = file.lastModified(),
             file = file
         )
+    }
+
+    fun saveBitmap(context: Context, bitmap: android.graphics.Bitmap, prefix: String = "SCR"): GalleryPhoto {
+        val stream = java.io.ByteArrayOutputStream()
+        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, stream)
+        return savePhoto(context, stream.toByteArray(), prefix = prefix, ext = "png")
     }
 
     fun saveImportedPhoto(context: Context, sourceUri: Uri): GalleryPhoto? {

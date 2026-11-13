@@ -16,9 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
-import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -55,15 +53,11 @@ fun PinScreen(
             enteredPin = next
             isError = false
 
-            if (next.length >= 4) {
-                if (SettingsDataStore.verifyPin(next, hashedPin)) {
-                    onSuccess()
-                } else if (next.length >= (if (hashedPin != null) 4 else 4)) {
-                    // Check if it's wrong or needs more digits
-                    if (SettingsDataStore.verifyPin(next, hashedPin)) {
-                        onSuccess()
-                    }
-                }
+            if (next.length >= 4 && SettingsDataStore.verifyPin(next, hashedPin)) {
+                onSuccess()
+            } else if (next.length == 6) {
+                isError = true
+                enteredPin = ""
             }
         }
     }
@@ -198,18 +192,7 @@ fun PinScreen(
                         Text(stringResource(R.string.cancel_button), color = Color.White.copy(alpha = 0.7f))
                     }
 
-                    // Fingerprint shortcut button
-                    IconButton(
-                        onClick = onSuccess,
-                        modifier = Modifier.testTag("pin_fingerprint_btn")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Fingerprint,
-                            contentDescription = "Unlock with Fingerprint",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
+                    Spacer(modifier = Modifier.width(48.dp))
 
                     if (enteredPin.length >= 4) {
                         TextButton(

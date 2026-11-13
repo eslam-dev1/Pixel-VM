@@ -37,9 +37,12 @@ import kotlinx.coroutines.launch
 import java.time.Instant
 import java.util.Locale
 
+import com.example.os.WindowManager
+
 @Composable
 fun ClockApp(
     alarmDao: AlarmDao,
+    windowManager: WindowManager? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -99,8 +102,8 @@ fun ClockApp(
         when (selectedTab) {
             0 -> AlarmsTab(alarmDao = alarmDao)
             1 -> WorldClockTab()
-            2 -> StopwatchTab()
-            3 -> TimerTab()
+            2 -> StopwatchTab(windowManager = windowManager)
+            3 -> TimerTab(windowManager = windowManager)
         }
     }
 }
@@ -337,7 +340,7 @@ private fun WorldClockTab() {
 }
 
 @Composable
-private fun StopwatchTab() {
+private fun StopwatchTab(windowManager: WindowManager? = null) {
     var isRunning by remember { mutableStateOf(false) }
     var elapsedMillis by remember { mutableLongStateOf(0L) }
     val laps = remember { mutableStateListOf<Long>() }
@@ -347,8 +350,11 @@ private fun StopwatchTab() {
             val startTime = System.currentTimeMillis() - elapsedMillis
             while (isRunning) {
                 elapsedMillis = System.currentTimeMillis() - startTime
-                delay(16)
+                windowManager?.updateStopwatchActivity(elapsedMillis, isRunning = true)
+                delay(50)
             }
+        } else {
+            windowManager?.updateStopwatchActivity(elapsedMillis, isRunning = false)
         }
     }
 
@@ -460,19 +466,27 @@ private fun StopwatchTab() {
 }
 
 @Composable
-private fun TimerTab() {
+private fun TimerTab(windowManager: WindowManager? = null) {
     var initialSeconds by remember { mutableIntStateOf(60) }
     var remainingSeconds by remember { mutableIntStateOf(60) }
     var isRunning by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isRunning, remainingSeconds) {
+        if (isRunning) {
+            windowManager?.updateTimerActivity(remainingSeconds, isRunning = true)
+        }
+    }
 
     LaunchedEffect(isRunning) {
         if (isRunning) {
             while (isRunning && remainingSeconds > 0) {
                 delay(1000)
                 remainingSeconds--
+                windowManager?.updateTimerActivity(remainingSeconds, isRunning = remainingSeconds > 0)
             }
             if (remainingSeconds <= 0) {
                 isRunning = false
+                windowManager?.clearTimerActivity()
             }
         }
     }
@@ -534,6 +548,7 @@ private fun TimerTab() {
                     .clickable {
                         isRunning = false
                         remainingSeconds = initialSeconds
+                        windowManager?.clearTimerActivity()
                     },
                 contentAlignment = Alignment.Center
             ) {

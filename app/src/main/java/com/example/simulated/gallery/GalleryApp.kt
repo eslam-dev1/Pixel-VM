@@ -1,5 +1,6 @@
 package com.example.simulated.gallery
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -218,6 +219,8 @@ private fun FullScreenPhotoViewer(
     }
 
     val dateFormat = remember { SimpleDateFormat("MMMM d, yyyy h:mm a", Locale.getDefault()) }
+
+    BackHandler(onBack = onBack)
 
     Box(
         modifier = Modifier

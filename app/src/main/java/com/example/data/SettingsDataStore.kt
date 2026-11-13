@@ -8,6 +8,8 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.example.model.PixelIconShape
+import com.example.model.PixelThemeSettings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.security.MessageDigest
@@ -16,7 +18,7 @@ val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "pi
 
 data class SystemSettings(
     val darkMode: String = "dark", // "system", "light", "dark"
-    val wallpaperId: String = "orig_sunset",
+    val wallpaperId: String = "wp_obsidian_eclipse",
     val hashedPin: String? = null,
     val showBezel: Boolean = false, // Bezel OFF by default on real phone
     val fontScale: Float = 1.0f,
@@ -38,8 +40,35 @@ data class SystemSettings(
     val deviceProfileStyle: String = "honor_x9d",
     val disableEdgeBack: Boolean = false,
     val selectedIconPack: String? = null,
-    val searchEngine: String = "google" // "google", "duckduckgo", "bing"
-)
+    val searchEngine: String = "google", // "google", "duckduckgo", "bing"
+    // Pixel Material You & Icon Shape Customization
+    val pixelIconShape: String = PixelIconShape.CIRCLE.name,
+    val useMaterialYouMonochrome: Boolean = false,
+    val tintPackIconsWithMaterialYou: Boolean = false,
+    // Android 15 Private Space
+    val privateSpaceAppsCsv: String = "notes,gallery",
+    val privateSpacePinHash: String? = null
+) {
+    fun toPixelThemeSettings(): PixelThemeSettings {
+        val parsedShape = try {
+            PixelIconShape.valueOf(pixelIconShape)
+        } catch (_: Exception) {
+            PixelIconShape.CIRCLE
+        }
+        return PixelThemeSettings(
+            useMaterialYouMonochrome = useMaterialYouMonochrome,
+            tintPackIconsWithMaterialYou = tintPackIconsWithMaterialYou,
+            iconShape = parsedShape
+        )
+    }
+
+    fun privateSpaceAppIds(): Set<String> {
+        return privateSpaceAppsCsv.split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .toSet()
+    }
+}
 
 class SettingsDataStore(private val context: Context) {
 
@@ -68,6 +97,13 @@ class SettingsDataStore(private val context: Context) {
         val DISABLE_EDGE_BACK = booleanPreferencesKey("disable_edge_back")
         val ICON_PACK = stringPreferencesKey("selected_icon_pack")
         val SEARCH_ENGINE = stringPreferencesKey("search_engine")
+
+        val PIXEL_ICON_SHAPE = stringPreferencesKey("pixel_icon_shape")
+        val MATERIAL_YOU_MONOCHROME = booleanPreferencesKey("material_you_monochrome")
+        val TINT_PACK_ICONS_MONOCHROME = booleanPreferencesKey("tint_pack_icons_monochrome")
+
+        val PRIVATE_SPACE_APPS_CSV = stringPreferencesKey("private_space_apps_csv")
+        val PRIVATE_SPACE_PIN_HASH = stringPreferencesKey("private_space_pin_hash")
     }
 
     val settingsFlow: Flow<SystemSettings> = context.dataStore.data.map { prefs ->
@@ -92,7 +128,12 @@ class SettingsDataStore(private val context: Context) {
             deviceProfileStyle = prefs[Keys.DEVICE_PROFILE_STYLE] ?: "honor_x9d",
             disableEdgeBack = prefs[Keys.DISABLE_EDGE_BACK] ?: false,
             selectedIconPack = prefs[Keys.ICON_PACK],
-            searchEngine = prefs[Keys.SEARCH_ENGINE] ?: "google"
+            searchEngine = prefs[Keys.SEARCH_ENGINE] ?: "google",
+            pixelIconShape = prefs[Keys.PIXEL_ICON_SHAPE] ?: PixelIconShape.CIRCLE.name,
+            useMaterialYouMonochrome = prefs[Keys.MATERIAL_YOU_MONOCHROME] ?: false,
+            tintPackIconsWithMaterialYou = prefs[Keys.TINT_PACK_ICONS_MONOCHROME] ?: false,
+            privateSpaceAppsCsv = prefs[Keys.PRIVATE_SPACE_APPS_CSV] ?: "notes,gallery",
+            privateSpacePinHash = prefs[Keys.PRIVATE_SPACE_PIN_HASH]
         )
     }
 
@@ -187,6 +228,33 @@ class SettingsDataStore(private val context: Context) {
 
     suspend fun setSearchEngine(engine: String) {
         context.dataStore.edit { it[Keys.SEARCH_ENGINE] = engine }
+    }
+
+    suspend fun setPixelIconShape(shape: PixelIconShape) {
+        context.dataStore.edit { it[Keys.PIXEL_ICON_SHAPE] = shape.name }
+    }
+
+    suspend fun setUseMaterialYouMonochrome(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.MATERIAL_YOU_MONOCHROME] = enabled }
+    }
+
+    suspend fun setTintPackIconsWithMaterialYou(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.TINT_PACK_ICONS_MONOCHROME] = enabled }
+    }
+
+    suspend fun setPrivateSpaceApps(appIds: Set<String>) {
+        val csv = appIds.map { it.trim() }.filter { it.isNotEmpty() }.sorted().joinToString(",")
+        context.dataStore.edit { it[Keys.PRIVATE_SPACE_APPS_CSV] = csv }
+    }
+
+    suspend fun setPrivateSpacePin(pin: String?) {
+        context.dataStore.edit { prefs ->
+            if (pin.isNullOrBlank()) {
+                prefs.remove(Keys.PRIVATE_SPACE_PIN_HASH)
+            } else {
+                prefs[Keys.PRIVATE_SPACE_PIN_HASH] = hashPin(pin)
+            }
+        }
     }
 
     suspend fun clearAll() {

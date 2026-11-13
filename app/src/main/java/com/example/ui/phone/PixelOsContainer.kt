@@ -1,6 +1,10 @@
 package com.example.ui.phone
 
+import android.content.ComponentName
+import android.view.KeyEvent
 import androidx.activity.compose.BackHandler
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -9,42 +13,46 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.example.R
 import com.example.data.PixelSimDatabase
 import com.example.data.SettingsDataStore
 import com.example.data.SystemSettings
+import com.example.os.AppRegistry
 import com.example.os.HomeScreenManager
+import com.example.os.LiveActivityState
 import com.example.os.OsScreen
+import com.example.os.SmartSelectExtractor
 import com.example.os.SystemStateHolder
 import com.example.os.WindowManager
-import com.example.simulated.calculator.CalculatorApp
-import com.example.simulated.calendar.CalendarApp
-import com.example.simulated.camera.CameraApp
-import com.example.simulated.clock.ClockApp
-import com.example.simulated.contacts.ContactsApp
-import com.example.simulated.files.FilesApp
-import com.example.simulated.gallery.GalleryApp
-import com.example.simulated.messages.MessagesApp
-import com.example.simulated.notes.NotesApp
-import com.example.simulated.phone.PhoneApp
-import com.example.simulated.settings.SettingsApp
+import com.example.simulator.systemui.PixelBottomGesturePill
+import com.example.simulator.systemui.PixelCircleToSearchOverlay
+import com.example.simulator.systemui.recents.PixelRecentsScreen
+import com.example.simulator.systemui.recents.RecentAppTask
+import com.example.ui.components.MediaLivePillCard
+import com.example.ui.components.ScreenshotMarkupEditor
+import com.example.ui.components.SmartSelectOverlay
 import com.example.ui.theme.Wallpapers
+import com.example.util.ScreenshotHelper
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -52,6 +60,7 @@ fun PixelOsContainer(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
     val scope = rememberCoroutineScope()
 
     val database = remember { PixelSimDatabase.getInstance(context) }
@@ -77,6 +86,10 @@ fun PixelOsContainer(
         }
     }
 
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        systemStateHolder.refreshSystemStates()
+    }
+
     LaunchedEffect(Unit) {
         homeScreenManager.initializeDefaultLayoutIfNeeded()
     }
@@ -89,11 +102,70 @@ fun PixelOsContainer(
     val isShadeOpen by windowManager.isNotificationShadeOpen.collectAsState()
     val notifications by windowManager.notifications.collectAsState()
     val homeItems by homeScreenManager.homeItems.collectAsState(initial = emptyList())
+    val splitState by windowManager.splitScreenState.collectAsState()
+    val liveActivity by windowManager.currentLiveActivity.collectAsState()
+    val isPrivateUnlocked by windowManager.isPrivateSpaceUnlocked.collectAsState()
+    val smartSelectAppId by windowManager.smartSelectAppId.collectAsState()
+    val markupBitmap by windowManager.markupBitmap.collectAsState()
+    val taskPreviews by windowManager.taskPreviews.collectAsState()
+    val isCircleToSearchOpen by windowManager.isCircleToSearchOpen.collectAsState()
+    val isDeviceMediaPlaying by systemStateHolder.isDeviceMediaPlaying.collectAsState()
+
+    var showMediaPillPopup by remember { mutableStateOf(false) }
+    var drawerSearchInitialQuery by remember { mutableStateOf("") }
+
+    val pixelThemeSettings = remember(settings) { settings.toPixelThemeSettings() }
+    val privateApps = remember(settings) { settings.privateSpaceAppIds() }
+    val hiddenApps = remember(privateApps, isPrivateUnlocked) {
+        if (isPrivateUnlocked) emptySet() else privateApps
+    }
+    val visibleNotifications = remember(notifications, privateApps, isPrivateUnlocked) {
+        WindowManager.filterNotificationsForPrivateSpace(notifications, privateApps, isPrivateUnlocked)
+    }
+
+    // Live Activity ticker for active simulated Phone calls & popup lifecycle
+    LaunchedEffect(liveActivity, isDeviceMediaPlaying) {
+        if (liveActivity !is LiveActivityState.MediaActivity && !isDeviceMediaPlaying) {
+            showMediaPillPopup = false
+        }
+        if (liveActivity is LiveActivityState.PhoneCallActivity) {
+            while (true) {
+                delay(1000L)
+                windowManager.tickSimulatedCall()
+            }
+        }
+    }
+
+    val captureActiveAppSnapshot: () -> Unit = {
+        if (currentScreen == OsScreen.APP && activeAppId != null) {
+            ScreenshotHelper.captureBitmap(view.rootView)?.let { captured ->
+                windowManager.saveTaskPreview(activeAppId!!, captured)
+            }
+        }
+    }
 
     // Back button handling: respect MagicOS system gesture conflict preference
     BackHandler(enabled = currentScreen != OsScreen.LOCK && !settings.disableEdgeBack) {
+        captureActiveAppSnapshot()
         if (!windowManager.handleBackGesture()) {
             windowManager.goHome()
+        }
+    }
+
+    // Apply Activity window screenBrightness directly without WRITE_SETTINGS permission
+    DisposableEffect(systemState.brightnessPercent) {
+        val activity = context as? android.app.Activity
+        activity?.window?.let { window ->
+            val lp = window.attributes
+            lp.screenBrightness = systemState.brightnessPercent.coerceIn(0.01f, 1.0f)
+            window.attributes = lp
+        }
+        onDispose {
+            activity?.window?.let { window ->
+                val lp = window.attributes
+                lp.screenBrightness = android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                window.attributes = lp
+            }
         }
     }
 
@@ -154,7 +226,15 @@ fun PixelOsContainer(
 
     val tiltOffset by parallaxSensorManager.offset.collectAsState()
 
-    MaterialTheme(colorScheme = animatedColorScheme, typography = scaledTypography) {
+    val liveActivityStatusText = when (val activity = liveActivity) {
+        is LiveActivityState.PhoneCallActivity -> "${activity.formattedDuration()} • ${activity.callerOrNumber}"
+        is LiveActivityState.TimerActivity -> activity.formattedRemaining()
+        is LiveActivityState.StopwatchActivity -> activity.formattedElapsed()
+        is LiveActivityState.MediaActivity -> "${activity.trackTitle} — ${activity.artist}"
+        LiveActivityState.None -> null
+    }
+
+    androidx.compose.material3.MaterialTheme(colorScheme = animatedColorScheme, typography = scaledTypography) {
         PhoneFrame(
             showBezel = settings.showBezel,
             deviceProfile = deviceProfile
@@ -172,13 +252,13 @@ fun PixelOsContainer(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(bottom = 28.dp) // space for navigation bar
+                        .padding(bottom = if (currentScreen == OsScreen.LOCK) 0.dp else 44.dp)
                 ) {
                     when (currentScreen) {
                         OsScreen.LOCK -> {
                             LockScreen(
                                 systemState = systemState,
-                                notifications = notifications,
+                                notifications = if (settings.notifLockScreenVisible) visibleNotifications else emptyList(),
                                 onUnlockTriggered = {
                                     windowManager.unlock(requiresPin = settings.hashedPin != null)
                                 }
@@ -199,27 +279,89 @@ fun PixelOsContainer(
                                 homeScreenManager = homeScreenManager,
                                 systemState = systemState,
                                 selectedIconPack = settings.selectedIconPack,
+                                pixelThemeSettings = pixelThemeSettings,
+                                hiddenAppIds = hiddenApps,
                                 onOpenApp = { appId -> windowManager.openApp(appId) },
-                                onOpenDrawer = { windowManager.openDrawer() }
+                                onOpenDrawer = {
+                                    drawerSearchInitialQuery = ""
+                                    windowManager.openDrawer()
+                                },
+                                onOpenDrawerWithQuery = { spoken ->
+                                    drawerSearchInitialQuery = spoken
+                                    windowManager.openDrawer()
+                                }
                             )
                         }
 
                         OsScreen.DRAWER -> {
                             AppDrawer(
-                                onOpenApp = { appId -> windowManager.openApp(appId) },
-                                onCloseDrawer = { windowManager.closeDrawer() },
+                                onOpenApp = { appId ->
+                                    drawerSearchInitialQuery = ""
+                                    windowManager.openApp(appId)
+                                },
+                                onCloseDrawer = {
+                                    drawerSearchInitialQuery = ""
+                                    windowManager.closeDrawer()
+                                },
                                 selectedIconPack = settings.selectedIconPack,
-                                searchEngine = settings.searchEngine
+                                searchEngine = settings.searchEngine,
+                                pixelThemeSettings = pixelThemeSettings,
+                                privateSpaceApps = privateApps,
+                                isPrivateSpaceUnlocked = isPrivateUnlocked,
+                                privateSpacePinHash = settings.privateSpacePinHash,
+                                onUnlockPrivateSpace = { windowManager.unlockPrivateSpace() },
+                                onLockPrivateSpace = { windowManager.lockPrivateSpace() },
+                                onToggleAppInPrivateSpace = { appId ->
+                                    val updated = if (appId in privateApps) privateApps - appId else privateApps + appId
+                                    scope.launch { settingsDataStore.setPrivateSpaceApps(updated) }
+                                },
+                                initialSearchQuery = drawerSearchInitialQuery
                             )
                         }
 
                         OsScreen.RECENTS -> {
-                            RecentsScreen(
-                                runningApps = runningApps,
-                                onSelectApp = { appId -> windowManager.openApp(appId) },
-                                onCloseApp = { appId -> windowManager.closeApp(appId) },
-                                onClearAll = { windowManager.clearAllRecentApps() },
-                                selectedIconPack = settings.selectedIconPack
+                            val recentTasks = runningApps.mapIndexed { index, appId ->
+                                val appDef = AppRegistry.getApp(appId)
+                                val label = appDef?.let { stringResource(it.titleRes) } ?: appId
+                                RecentAppTask(
+                                    taskId = index + 1,
+                                    componentName = ComponentName(context.packageName, appId),
+                                    appName = label,
+                                    appIcon = null,
+                                    previewSnapshot = taskPreviews[appId],
+                                    isLocked = appId in privateApps && !isPrivateUnlocked
+                                )
+                            }
+
+                            PixelRecentsScreen(
+                                recentTasks = recentTasks,
+                                onTaskSelected = { task ->
+                                    windowManager.openApp(task.componentName.className)
+                                },
+                                onTaskDismissed = { task ->
+                                    windowManager.closeApp(task.componentName.className)
+                                },
+                                onClearAllTasks = {
+                                    windowManager.clearAllRecentApps()
+                                },
+                                onTakeScreenshot = { task ->
+                                    val targetBmp = taskPreviews[task.componentName.className]
+                                        ?: ScreenshotHelper.captureBitmap(view.rootView)
+                                    if (targetBmp != null) {
+                                        windowManager.openMarkupEditor(targetBmp)
+                                    }
+                                },
+                                onSelectContent = { task ->
+                                    windowManager.openSmartSelect(task.componentName.className)
+                                },
+                                onSplitScreen = { task ->
+                                    windowManager.startSplitScreen(task.componentName.className)
+                                },
+                                onDismissOverview = {
+                                    windowManager.goHome()
+                                },
+                                selectedIconPack = settings.selectedIconPack,
+                                pixelThemeSettings = pixelThemeSettings
                             )
                         }
 
@@ -238,16 +380,77 @@ fun PixelOsContainer(
                                 )
                             }
                         }
+
+                        OsScreen.SPLIT_SCREEN -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(top = 34.dp) // status bar clearance
+                            ) {
+                                SplitScreenView(
+                                    splitState = splitState,
+                                    database = database,
+                                    settingsDataStore = settingsDataStore,
+                                    systemStateHolder = systemStateHolder,
+                                    windowManager = windowManager,
+                                    selectedIconPack = settings.selectedIconPack,
+                                    pixelThemeSettings = pixelThemeSettings,
+                                    hiddenAppIds = hiddenApps
+                                )
+                            }
+                        }
                     }
                 }
 
-                // Status Bar (always visible at top except inside live camera or lock)
+                // Status Bar (always visible at top with Live Activity Pill)
+                val effectiveLiveActivity = if (liveActivity == LiveActivityState.None && isDeviceMediaPlaying) {
+                    LiveActivityState.MediaActivity(
+                        trackTitle = stringResource(R.string.media_playing_active),
+                        artist = "",
+                        isPlaying = true
+                    )
+                } else {
+                    liveActivity
+                }
                 StatusBar(
                     systemState = systemState,
-                    textColor = if (currentScreen == OsScreen.APP && !isDark && activeAppId != "camera") Color.Black else Color.White,
+                    textColor = if ((currentScreen == OsScreen.APP || currentScreen == OsScreen.SPLIT_SCREEN) && !isDark && activeAppId != "camera") Color.Black else Color.White,
                     onOpenShade = { windowManager.setNotificationShadeOpen(true) },
+                    liveActivity = effectiveLiveActivity,
+                    onLivePillClick = {
+                        when {
+                            effectiveLiveActivity is LiveActivityState.PhoneCallActivity -> windowManager.openApp("phone")
+                            effectiveLiveActivity is LiveActivityState.TimerActivity ||
+                                effectiveLiveActivity is LiveActivityState.StopwatchActivity -> windowManager.openApp("clock")
+                            effectiveLiveActivity is LiveActivityState.MediaActivity -> showMediaPillPopup = !showMediaPillPopup
+                        }
+                    },
                     modifier = Modifier.align(Alignment.TopCenter)
                 )
+
+                // Collapsible Media Live Pill Mini-Player
+                AnimatedVisibility(
+                    visible = showMediaPillPopup && effectiveLiveActivity is LiveActivityState.MediaActivity,
+                    enter = slideInVertically(initialOffsetY = { -it / 2 }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { -it / 2 }) + fadeOut(),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 42.dp)
+                ) {
+                    val media = effectiveLiveActivity as? LiveActivityState.MediaActivity
+                    if (media != null) {
+                        MediaLivePillCard(
+                            media = media,
+                            onTogglePlayPause = { systemStateHolder.dispatchMediaKey(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) },
+                            onNextTrack = { systemStateHolder.dispatchMediaKey(KeyEvent.KEYCODE_MEDIA_NEXT) },
+                            onClose = {
+                                systemStateHolder.dispatchMediaKey(KeyEvent.KEYCODE_MEDIA_STOP)
+                                windowManager.stopMedia()
+                            },
+                            onDismissPopup = { showMediaPillPopup = false }
+                        )
+                    }
+                }
 
                 // Notification Shade Overlay
                 AnimatedVisibility(
@@ -259,21 +462,121 @@ fun PixelOsContainer(
                     NotificationShade(
                         systemState = systemState,
                         systemStateHolder = systemStateHolder,
-                        notifications = notifications,
+                        notifications = visibleNotifications,
                         onDismissNotification = { id -> windowManager.dismissNotification(id) },
                         onClearAllNotifications = { windowManager.clearAllNotifications() },
                         onOpenSettings = {
                             windowManager.openApp("settings")
                         },
-                        onClose = { windowManager.setNotificationShadeOpen(false) }
+                        onClose = { windowManager.setNotificationShadeOpen(false) },
+                        onTakeMarkupScreenshot = {
+                            windowManager.setNotificationShadeOpen(false)
+                            ScreenshotHelper.captureBitmap(view.rootView)?.let { bmp ->
+                                windowManager.openMarkupEditor(bmp)
+                            }
+                        }
                     )
                 }
 
-                // Gesture Navigation Bar (at bottom)
-                NavigationBar(
-                    onHome = { windowManager.goHome() },
-                    onRecents = { windowManager.openRecents() },
-                    pillColor = if (currentScreen == OsScreen.APP && !isDark && activeAppId != "camera") Color.Black.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.8f),
+                // Live Context Items for Smart Select & Circle to Search
+                val liveScreenExtraContent = remember(systemState, visibleNotifications, runningApps) {
+                    buildList {
+                        add("${systemState.dateFormatted} • ${systemState.timeFormatted}")
+                        add("Battery ${systemState.batteryPercent}%${if (systemState.isCharging) " Charging" else ""}")
+                        visibleNotifications.take(3).forEach { notif ->
+                            add("${notif.title}: ${notif.message}")
+                        }
+                        if (runningApps.isNotEmpty()) {
+                            add("Open tasks: ${runningApps.joinToString(", ")}")
+                        }
+                    }
+                }
+
+                // Overview Smart Select Overlay
+                smartSelectAppId?.let { appId ->
+                    SmartSelectOverlay(
+                        appId = appId,
+                        liveStatusText = liveActivityStatusText,
+                        extraContent = liveScreenExtraContent,
+                        onDismiss = { windowManager.closeSmartSelect() }
+                    )
+                }
+
+                // Pixel Markup Screenshot Editor Overlay
+                markupBitmap?.let { bmp ->
+                    ScreenshotMarkupEditor(
+                        bitmap = bmp,
+                        onSave = { editedBitmap ->
+                            ScreenshotHelper.saveBitmapWithFeedback(context, editedBitmap)
+                            windowManager.closeMarkupEditor()
+                        },
+                        onDismiss = { windowManager.closeMarkupEditor() }
+                    )
+                }
+
+                // Circle to Search Overlay (Long-press gesture pill to launch)
+                val circleTargetId = when (currentScreen) {
+                    OsScreen.APP -> activeAppId ?: "home"
+                    OsScreen.SPLIT_SCREEN -> splitState.topAppId ?: "home"
+                    OsScreen.HOME -> "home"
+                    OsScreen.DRAWER -> "drawer"
+                    OsScreen.RECENTS -> "recents"
+                    else -> "pixel"
+                }
+                val circleDisplayName = AppRegistry.getApp(circleTargetId)?.let { stringResource(it.titleRes) }
+                    ?: stringResource(R.string.app_name)
+                val circleSnippets = remember(circleTargetId, circleDisplayName, liveActivityStatusText, liveScreenExtraContent) {
+                    SmartSelectExtractor.extractSnippets(
+                        appId = circleTargetId,
+                        appDisplayName = circleDisplayName,
+                        liveStatusText = liveActivityStatusText,
+                        extraContent = liveScreenExtraContent
+                    )
+                }
+
+                PixelCircleToSearchOverlay(
+                    isVisible = isCircleToSearchOpen,
+                    onDismiss = { windowManager.closeCircleToSearch() },
+                    onRegionCircled = { rect ->
+                        if (circleTargetId != "home" && circleTargetId != "pixel") {
+                            android.widget.Toast.makeText(
+                                context,
+                                "$circleDisplayName (${rect.width.toInt()}×${rect.height.toInt()})",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    },
+                    onTranslateScreen = {
+                        android.widget.Toast.makeText(
+                            context,
+                            context.getString(R.string.circle_to_search_translated_mode),
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    },
+                    detectedSnippets = circleSnippets,
+                    searchEngine = settings.searchEngine
+                )
+
+                // Pixel Gesture Navigation Pill (Swipe Up -> Home/Recents, Long-Press -> Circle to Search)
+                PixelBottomGesturePill(
+                    onSwipeUpHome = {
+                        captureActiveAppSnapshot()
+                        windowManager.goHome()
+                    },
+                    onSwipeUpRecents = {
+                        captureActiveAppSnapshot()
+                        windowManager.openRecents()
+                    },
+                    onTriggerCircleToSearch = {
+                        if (currentScreen != OsScreen.LOCK && currentScreen != OsScreen.PIN) {
+                            windowManager.openCircleToSearch()
+                        }
+                    },
+                    pillColor = if ((currentScreen == OsScreen.APP || currentScreen == OsScreen.SPLIT_SCREEN) && !isDark && activeAppId != "camera") {
+                        Color.Black.copy(alpha = 0.7f)
+                    } else {
+                        Color.White.copy(alpha = 0.85f)
+                    },
                     modifier = Modifier.align(Alignment.BottomCenter)
                 )
             }

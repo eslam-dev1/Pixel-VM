@@ -39,12 +39,18 @@ fun WindowManagerView(
     settingsDataStore: SettingsDataStore,
     systemStateHolder: SystemStateHolder,
     windowManager: WindowManager,
+    applyStatusBarPadding: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
 
     val settings by settingsDataStore.settingsFlow.collectAsState(initial = com.example.data.SystemSettings())
     val animationStiffness = if (settings.smoothScrolling120Hz) Spring.StiffnessMediumLow else Spring.StiffnessLow
+    val topPadding = if (applyStatusBarPadding) {
+        WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    } else {
+        0.dp
+    }
 
     AnimatedContent(
         targetState = activeAppId,
@@ -64,27 +70,35 @@ fun WindowManagerView(
                         )
                     ) + fadeOut(animationSpec = tween(180)))
         },
-        label = "app_transition"
+        label = "app_transition",
+        modifier = modifier
     ) { appId ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()) // dynamic clearance
+                .padding(top = topPadding)
         ) {
             when (appId) {
                 "calculator" -> CalculatorApp()
-                "clock" -> ClockApp(alarmDao = database.alarmDao())
+                "clock" -> ClockApp(
+                    alarmDao = database.alarmDao(),
+                    windowManager = windowManager
+                )
                 "notes" -> NotesApp(noteDao = database.noteDao())
                 "contacts" -> ContactsApp()
-                "phone" -> PhoneApp()
+                "phone" -> PhoneApp(windowManager = windowManager)
                 "messages" -> MessagesApp()
-                "camera" -> CameraApp(onOpenGallery = { windowManager.openApp("gallery") })
+                "camera" -> CameraApp(
+                    onOpenGallery = { windowManager.openApp("gallery") },
+                    onMarkupPhoto = { bmp -> windowManager.openMarkupEditor(bmp) }
+                )
                 "gallery" -> GalleryApp()
                 "files" -> FilesApp()
                 "calendar" -> CalendarApp(calendarEventDao = database.calendarEventDao())
                 "settings" -> SettingsApp(
                     settingsDataStore = settingsDataStore,
                     systemStateHolder = systemStateHolder,
+                    windowManager = windowManager,
                     onResetPhone = {
                         scope.launch {
                             database.noteDao().clearAll()
@@ -96,7 +110,6 @@ fun WindowManagerView(
                         }
                     }
                 )
-
             }
         }
     }

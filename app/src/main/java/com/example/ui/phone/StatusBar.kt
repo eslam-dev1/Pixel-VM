@@ -22,7 +22,12 @@ import androidx.compose.material.icons.filled.DoNotDisturb
 import androidx.compose.material.icons.filled.FlashlightOn
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material.icons.rounded.Call
+import androidx.compose.material.icons.rounded.HourglassBottom
+import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -32,16 +37,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.SimulatedSystemState
+import com.example.os.LiveActivityState
+import com.example.ui.components.PixelStatusBarLivePill
 
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.widthIn
 
 @Composable
 fun StatusBar(
     systemState: SimulatedSystemState,
     textColor: Color = Color.White,
     onOpenShade: () -> Unit = {},
+    liveActivity: LiveActivityState = LiveActivityState.None,
+    onLivePillClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val statusBarPadding = WindowInsets.statusBars.asPaddingValues()
@@ -55,10 +65,11 @@ fun StatusBar(
             .padding(start = 16.dp, end = 16.dp, top = statusBarPadding.calculateTopPadding() / 2f),
         contentAlignment = Alignment.Center
     ) {
-        // Left: Time
+        // Start: Time + Live Activity Pill
         Row(
             modifier = Modifier.align(Alignment.CenterStart),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
                 text = systemState.timeFormatted,
@@ -66,6 +77,47 @@ fun StatusBar(
                 fontWeight = FontWeight.SemiBold,
                 color = textColor
             )
+
+            when (liveActivity) {
+                is LiveActivityState.PhoneCallActivity -> {
+                    PixelStatusBarLivePill(
+                        statusText = "${liveActivity.formattedDuration()} • ${liveActivity.callerOrNumber}",
+                        icon = Icons.Rounded.Call,
+                        onClick = onLivePillClick,
+                        containerColor = Color(0xFF1B5E20),
+                        contentColor = Color.White,
+                        showPulsatingDot = true,
+                        modifier = Modifier.widthIn(max = 148.dp)
+                    )
+                }
+                is LiveActivityState.TimerActivity -> {
+                    PixelStatusBarLivePill(
+                        statusText = liveActivity.formattedRemaining(),
+                        icon = Icons.Rounded.HourglassBottom,
+                        onClick = onLivePillClick,
+                        modifier = Modifier.widthIn(max = 120.dp)
+                    )
+                }
+                is LiveActivityState.StopwatchActivity -> {
+                    PixelStatusBarLivePill(
+                        statusText = liveActivity.formattedElapsed(),
+                        icon = Icons.Rounded.Timer,
+                        onClick = onLivePillClick,
+                        modifier = Modifier.widthIn(max = 120.dp)
+                    )
+                }
+                is LiveActivityState.MediaActivity -> {
+                    PixelStatusBarLivePill(
+                        statusText = liveActivity.trackTitle,
+                        icon = Icons.Rounded.MusicNote,
+                        onClick = onLivePillClick,
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.widthIn(max = 136.dp)
+                    )
+                }
+                LiveActivityState.None -> Unit
+            }
         }
 
         // Right: System status icons

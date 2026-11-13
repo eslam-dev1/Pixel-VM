@@ -1,5 +1,6 @@
 package com.example.simulated.notes
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -310,6 +311,10 @@ private fun NoteEditorScreen(
     var colorIndex by remember { mutableIntStateOf(initialNote?.colorIndex ?: 0) }
 
     val bgColor = NOTE_COLORS.getOrElse(colorIndex) { NOTE_COLORS.last() }
+
+    BackHandler {
+        onSave(title, content, isPinned, colorIndex)
+    }
 
     Column(
         modifier = Modifier

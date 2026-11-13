@@ -28,18 +28,24 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -56,6 +62,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -65,10 +72,32 @@ import com.example.domain.search.FuzzySearch
 import com.example.domain.search.SystemSettingItem
 import com.example.domain.search.SystemSettingsRegistry
 import com.example.model.AppDefinition
+import com.example.model.PixelThemeSettings
 import com.example.os.AppRegistry
 import com.example.simulated.contacts.ContactsHelper
 import com.example.simulated.contacts.DeviceContact
 import com.example.ui.components.SimulatedAppIcon
+
+object AppDrawerFilter {
+    fun filterPublicApps(
+        appsWithTitles: List<Pair<AppDefinition, String>>,
+        privateAppIds: Set<String>,
+        searchQuery: String
+    ): List<Pair<AppDefinition, String>> {
+        val visible = appsWithTitles.filter { (app, _) -> app.id !in privateAppIds }
+        if (searchQuery.isBlank()) return visible
+        return visible.filter { (app, title) ->
+            FuzzySearch.matches(searchQuery, title) || FuzzySearch.matches(searchQuery, app.id)
+        }
+    }
+
+    fun filterPrivateApps(
+        appsWithTitles: List<Pair<AppDefinition, String>>,
+        privateAppIds: Set<String>
+    ): List<Pair<AppDefinition, String>> {
+        return appsWithTitles.filter { (app, _) -> app.id in privateAppIds }
+    }
+}
 
 @Composable
 fun AppDrawer(
@@ -76,10 +105,18 @@ fun AppDrawer(
     onCloseDrawer: () -> Unit,
     selectedIconPack: String? = null,
     searchEngine: String = "google",
+    pixelThemeSettings: PixelThemeSettings = PixelThemeSettings(),
+    privateSpaceApps: Set<String> = emptySet(),
+    isPrivateSpaceUnlocked: Boolean = false,
+    privateSpacePinHash: String? = null,
+    onUnlockPrivateSpace: () -> Unit = {},
+    onLockPrivateSpace: () -> Unit = {},
+    onToggleAppInPrivateSpace: (String) -> Unit = {},
+    initialSearchQuery: String = "",
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var searchQuery by remember { mutableStateOf("") }
+    var searchQuery by remember(initialSearchQuery) { mutableStateOf(initialSearchQuery) }
 
     // Contacts permission & query state
     var hasContactsPermission by remember { mutableStateOf(ContactsHelper.hasContactsPermission(context)) }
@@ -108,15 +145,20 @@ fun AppDrawer(
         }.sortedBy { it.second }
     }
 
-    // Fuzzy matching for Applications
-    val filteredApps = remember(searchQuery, appsWithTitles) {
-        if (searchQuery.isBlank()) {
-            appsWithTitles
-        } else {
-            appsWithTitles.filter { (app, title) ->
-                FuzzySearch.matches(searchQuery, title) || FuzzySearch.matches(searchQuery, app.id)
-            }
-        }
+    var showPrivatePinDialog by remember { mutableStateOf(false) }
+    var showManagePrivateAppsDialog by remember { mutableStateOf(false) }
+
+    // Fuzzy matching for public (non-Private-Space) Applications
+    val filteredApps = remember(searchQuery, appsWithTitles, privateSpaceApps) {
+        AppDrawerFilter.filterPublicApps(
+            appsWithTitles = appsWithTitles,
+            privateAppIds = privateSpaceApps,
+            searchQuery = searchQuery
+        )
+    }
+
+    val privateAppsList = remember(appsWithTitles, privateSpaceApps) {
+        AppDrawerFilter.filterPrivateApps(appsWithTitles, privateSpaceApps)
     }
 
     // Fuzzy matching for Contacts
@@ -226,7 +268,7 @@ fun AppDrawer(
                     // Regular App Drawer view
                     item {
                         Text(
-                            text = "All Apps (${appsWithTitles.size})",
+                            text = "All Apps (${filteredApps.size})",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color.White.copy(alpha = 0.5f),
@@ -247,7 +289,8 @@ fun AppDrawer(
                             SimulatedAppIcon(
                                 appId = app.id,
                                 size = 48.dp,
-                                iconPackPackage = selectedIconPack
+                                iconPackPackage = selectedIconPack,
+                                pixelThemeSettings = pixelThemeSettings
                             )
                             Spacer(modifier = Modifier.width(16.dp))
                             Text(
@@ -257,6 +300,27 @@ fun AppDrawer(
                                 fontWeight = FontWeight.Medium
                             )
                         }
+                    }
+
+                    // Android 15 Private Space Container
+                    item {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        PrivateSpaceDrawerCard(
+                            privateApps = privateAppsList,
+                            isUnlocked = isPrivateSpaceUnlocked,
+                            selectedIconPack = selectedIconPack,
+                            pixelThemeSettings = pixelThemeSettings,
+                            onUnlockClick = {
+                                if (privateSpacePinHash != null) {
+                                    showPrivatePinDialog = true
+                                } else {
+                                    onUnlockPrivateSpace()
+                                }
+                            },
+                            onLockClick = onLockPrivateSpace,
+                            onManageClick = { showManagePrivateAppsDialog = true },
+                            onOpenApp = onOpenApp
+                        )
                     }
                 } else {
                     // Group 1: Applications
@@ -281,7 +345,8 @@ fun AppDrawer(
                                 SimulatedAppIcon(
                                     appId = app.id,
                                     size = 44.dp,
-                                    iconPackPackage = selectedIconPack
+                                    iconPackPackage = selectedIconPack,
+                                    pixelThemeSettings = pixelThemeSettings
                                 )
                                 Spacer(modifier = Modifier.width(16.dp))
                                 Column {
@@ -510,6 +575,225 @@ fun AppDrawer(
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showPrivatePinDialog) {
+        var enteredPin by remember { mutableStateOf("") }
+        var pinError by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = { showPrivatePinDialog = false },
+            title = { Text(stringResource(R.string.private_space_unlock_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = enteredPin,
+                        onValueChange = {
+                            if (it.length <= 6 && it.all { c -> c.isDigit() }) {
+                                enteredPin = it
+                                pinError = false
+                            }
+                        },
+                        label = { Text(stringResource(R.string.enter_pin)) },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("private_space_pin_input")
+                    )
+                    if (pinError) {
+                        Text(
+                            text = stringResource(R.string.wrong_pin),
+                            color = MaterialTheme.colorScheme.error,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (SettingsDataStore.verifyPin(enteredPin, privateSpacePinHash)) {
+                            showPrivatePinDialog = false
+                            onUnlockPrivateSpace()
+                        } else {
+                            pinError = true
+                        }
+                    },
+                    modifier = Modifier.testTag("private_space_pin_confirm_btn")
+                ) {
+                    Text(stringResource(R.string.private_space_unlock_btn))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPrivatePinDialog = false }) {
+                    Text(stringResource(R.string.cancel_button))
+                }
+            }
+        )
+    }
+
+    if (showManagePrivateAppsDialog) {
+        AlertDialog(
+            onDismissRequest = { showManagePrivateAppsDialog = false },
+            title = { Text(stringResource(R.string.private_space_manage_apps)) },
+            text = {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(280.dp)
+                ) {
+                    items(appsWithTitles.filter { it.first.id != "settings" }, key = { it.first.id }) { (app, title) ->
+                        val isHidden = app.id in privateSpaceApps
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onToggleAppInPrivateSpace(app.id) }
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = isHidden,
+                                onCheckedChange = { onToggleAppInPrivateSpace(app.id) }
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(text = title)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showManagePrivateAppsDialog = false }) {
+                    Text(stringResource(R.string.close_button))
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun PrivateSpaceDrawerCard(
+    privateApps: List<Pair<AppDefinition, String>>,
+    isUnlocked: Boolean,
+    selectedIconPack: String?,
+    pixelThemeSettings: PixelThemeSettings,
+    onUnlockClick: () -> Unit,
+    onLockClick: () -> Unit,
+    onManageClick: () -> Unit,
+    onOpenApp: (String) -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF22242C)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("private_space_card")
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = if (isUnlocked) Icons.Default.LockOpen else Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = stringResource(R.string.private_space_title),
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                        Text(
+                            text = if (isUnlocked) {
+                                stringResource(R.string.private_space_unlocked_sub, privateApps.size)
+                            } else {
+                                stringResource(R.string.private_space_locked_sub)
+                            },
+                            color = Color.White.copy(alpha = 0.65f),
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isUnlocked) {
+                        IconButton(
+                            onClick = onManageClick,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .testTag("private_space_manage_btn")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = stringResource(R.string.private_space_manage_apps),
+                                tint = Color.White.copy(alpha = 0.85f)
+                            )
+                        }
+                        OutlinedButton(
+                            onClick = onLockClick,
+                            modifier = Modifier.testTag("private_space_lock_btn")
+                        ) {
+                            Text(stringResource(R.string.private_space_lock_btn), fontSize = 12.sp)
+                        }
+                    } else {
+                        Button(
+                            onClick = onUnlockClick,
+                            modifier = Modifier.testTag("private_space_unlock_btn")
+                        ) {
+                            Text(stringResource(R.string.private_space_unlock_btn), fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+
+            if (isUnlocked) {
+                if (privateApps.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.private_space_empty),
+                        color = Color.White.copy(alpha = 0.6f),
+                        fontSize = 12.sp
+                    )
+                } else {
+                    privateApps.forEach { (app, title) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .clickable { onOpenApp(app.id) }
+                                .padding(horizontal = 8.dp, vertical = 6.dp)
+                                .testTag("private_space_app_${app.id}"),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            SimulatedAppIcon(
+                                appId = app.id,
+                                size = 42.dp,
+                                iconPackPackage = selectedIconPack,
+                                pixelThemeSettings = pixelThemeSettings
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                text = title,
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium
+                            )
                         }
                     }
                 }
