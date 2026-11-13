@@ -37,7 +37,7 @@ jobs:
     - name: Accept licenses and install Android SDK packages
       run: |
         export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-        SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f 2>/devnull | sort -V | tail -n 1)
+        SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f 2>/dev/null | sort -V | tail -n 1)
         if [ -z "$SDKMANAGER" ]; then SDKMANAGER=$(which sdkmanager); fi
         echo "Using sdkmanager at: $SDKMANAGER"
         yes | "$SDKMANAGER" --licenses > /dev/null || true
